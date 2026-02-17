@@ -1,0 +1,7 @@
+{
+  "name": "Lyrning LMS",
+  "description": "A futuristic Learning Management System featuring integrated AI tutoring, automated assignment generation, and deep student analytics for teachers.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
