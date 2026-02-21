@@ -70,65 +70,62 @@ To run LyrningLMS locally, ensure you have the following software installed:
    cd LyrningLMS
    ```
 
-2. **Install frontend dependencies:**
+2. **Install dependencies:**
    ```bash
    npm install
    ```
 
 3. **Set up environment variables:**
-   - Create a `.env.local` file in the root directory
-   - Add your Gemini API key:
+   - Create a `.env` file in the project root (this repo already includes one for local dev)
+   - Required values:
      ```
-     VITE_GEMINI_API_KEY=your_gemini_api_key_here
-     ```
-
-4. **Set up the database (when backend is ready):**
-   ```bash
-   createdb lyrninglms
-   psql -d lyrninglms -f schema.sql
-   psql -d lyrninglms -f seed.sql
-   ```
-
-5. **Configure backend environment variables (when backend is ready):**
-   - Create a `.env` file in the backend directory with:
-     ```
-     DATABASE_URL=postgresql://username:password@localhost:5432/lyrninglms
+     DATABASE_URL=postgresql://postgres:admin@localhost:5432/lyrning
+     PORT=3001
+     NODE_ENV=development
      GEMINI_API_KEY=your_gemini_api_key_here
-     PORT=5000
      ```
+
+4. **Set up the database:**
+   ```bash
+   createdb lyrning
+   psql -U postgres -d lyrning -f backend/db/schema.sql
+   psql -U postgres -d lyrning -f backend/db/seed.sql
+   ```
 
 ## Running the Application
 
-### Frontend Only (Current State)
+### Full Application (Backend + Frontend)
 
-1. **Start the development server:**
+1. **Start both servers:**
    ```bash
    npm run dev
    ```
 
-2. **Open your browser and navigate to:**
+2. **Open your browser to:**
    ```
-   http://localhost:5173
-   ```
-
-### Full Application (When Backend is Complete)
-
-1. **Start the backend server:**
-   ```bash
-   # From the backend directory
-   npm start
-   ```
-   The backend will be available at `http://localhost:5000`
-
-2. **In a new terminal, start the frontend:**
-   ```bash
-   npm run dev
+   http://localhost:3000
    ```
 
-3. **Open your browser to:**
+3. **Backend API is available at:**
    ```
-   http://localhost:5173
+   http://localhost:3001
    ```
+
+## Test Login Credentials
+
+All seeded accounts use the same password: `password123`.
+
+**Teachers:**
+- `rdavis`
+- `jmiller`
+- `dwilson`
+- `landerson`
+
+**Students:**
+- `jsmith`
+- `sjohnson`
+- `mwilliams`
+- `ebrown`
 
 ## Verifying the Vertical Slice
 

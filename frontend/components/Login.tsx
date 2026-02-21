@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { UserRole, UserSession } from '../types';
-import { COLORS, MOCK_STUDENTS } from '../constants';
+import { COLORS } from '../constants';
 import { Send } from './Icons';
 
 interface LoginProps {
@@ -11,19 +11,59 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [userType, setUserType] = useState<'student' | 'teacher'>('student');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'teacher' && password === 'teacher123') {
-      onLogin({ role: UserRole.TEACHER });
-    } else if (username === 'student' && password === 'student123') {
-      onLogin({ 
-        role: UserRole.STUDENT, 
-        studentData: MOCK_STUDENTS[0] // Default to first mock student
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password,
+          userType,
+        }),
       });
-    } else {
-      setError('Invalid credentials. Hint: teacher/teacher123 or student/student123');
+
+      const data = await response.json();
+
+      if (data.success) {
+        const session: UserSession = {
+          role: userType === 'teacher' ? UserRole.TEACHER : UserRole.STUDENT,
+          userId: data.userId,
+          userName: data.userName,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+        };
+
+        if (userType === 'student') {
+          session.studentData = {
+            id: data.userId,
+            name: `${data.firstName} ${data.lastName}`,
+            email: data.email,
+            currentGPA: 0,
+            assignments: [],
+          };
+        }
+
+        onLogin(session);
+      } else {
+        setError(data.error || 'Login failed. Please try again.');
+      }
+    } catch (err) {
+      setError('Connection error. Make sure the backend server is running on port 4000.');
+      console.error('Login error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,13 +85,42 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Login as</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setUserType('student')}
+                className={`flex-1 py-2 px-4 rounded-xl font-medium transition-all ${
+                  userType === 'student'
+                    ? 'bg-red-100 text-gray-900 border-2 border-gray-900'
+                    : 'bg-gray-100 text-gray-600 border-2 border-transparent'
+                }`}
+              >
+                Student
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserType('teacher')}
+                className={`flex-1 py-2 px-4 rounded-xl font-medium transition-all ${
+                  userType === 'teacher'
+                    ? 'bg-red-100 text-gray-900 border-2 border-gray-900'
+                    : 'bg-gray-100 text-gray-600 border-2 border-transparent'
+                }`}
+              >
+                Teacher
+              </button>
+            </div>
+          </div>
+
+          <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Username</label>
             <input 
               type="text" 
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900"
-              placeholder="e.g. teacher or student"
+              disabled={loading}
+              className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900 disabled:opacity-50"
+              placeholder="Enter your username"
             />
           </div>
           <div>
@@ -60,7 +129,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900"
+              disabled={loading}
+              className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-red-100 transition-all text-gray-900 disabled:opacity-50"
               placeholder="••••••••"
             />
           </div>
@@ -69,10 +139,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
           <button 
             type="submit"
-            className="w-full py-4 text-black font-bold rounded-2xl shadow-lg hover:opacity-90 transition-all transform hover:scale-[1.01]"
+            disabled={loading}
+            className="w-full py-4 text-black font-bold rounded-2xl shadow-lg hover:opacity-90 transition-all transform hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: COLORS.primary }}
           >
-            Log In
+            {loading ? 'Logging in...' : 'Log In'}
           </button>
         </form>
 

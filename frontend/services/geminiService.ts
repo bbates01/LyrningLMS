@@ -1,13 +1,17 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const chatWithTutor = async (
   message: string, 
   history: { role: string; content: string }[], 
   instructions: string
 ): Promise<string> => {
+  if (!ai) {
+    return "Gemini API is not configured. Please add your GEMINI_API_KEY to the .env file.";
+  }
   try {
     const formattedHistory = history.map(h => `${h.role === 'user' ? 'Student' : 'Tutor'}: ${h.content}`).join('\n');
     

@@ -16,15 +16,23 @@ export type ViewState =
   | 'STUDENT_METRICS';
 
 export interface Student {
-  id: string;
+  id: string | number;
   name: string;
-  course: string;
-  period: string;
+  course?: string;
+  period?: string;
   avatar?: string;
+  email?: string;
+  currentGPA?: number;
+  assignments?: any[];
 }
 
 export interface UserSession {
   role: UserRole;
+  userId?: number;
+  userName?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
   studentData?: Student;
 }
 
