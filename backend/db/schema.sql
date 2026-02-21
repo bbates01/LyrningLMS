@@ -35,6 +35,7 @@ CREATE TABLE subjects (
 -- Classes
 CREATE TABLE classes (
     class_id     SERIAL PRIMARY KEY,
+    class_code   VARCHAR(20)  NOT NULL UNIQUE,
     subject_id   INT  NOT NULL REFERENCES subjects(subject_id),
     teacher_id   INT  NOT NULL REFERENCES teachers(teacher_id),
     class_name   VARCHAR(150) NOT NULL,

@@ -1,159 +1,198 @@
 # LyrningLMS
 
+A learning management system that integrates AI as a guided learning tool while giving teachers visibility into student understanding, engagement, and AI dependency.
+
+**Current vertical slice:** Adding a student to a class by class code (teacher shares code → student enters code in “Add class” → enrollment is created). Creating assignments and submitting work are not implemented yet.
+
+---
+
 ## App Summary
 
-LyrningLMS addresses the growing problem of AI dependency in teenagers by creating a learning environment where AI is strategically integrated to promote genuine understanding rather than enable shortcuts. The platform empowers teachers to create assignments, quizzes, labs, and projects while embedding Google's Gemini API with strict guardrails that prevent students from simply copying AI output. Instead, the AI serves as a controlled learning tool that teachers can configure with specific restrictions and guidance parameters, ensuring it supports learning rather than replacing it. Teachers gain visibility into student metrics including understanding level, engagement, and AI dependency—measuring exactly how much each student relies on the chatbot feature. This data-driven approach allows educators to identify students who are becoming over-reliant on AI and adjust their support accordingly. By combining assignment management with intelligent AI monitoring, LyrningLMS helps students develop independent problem-solving skills while safely leveraging AI as a learning aid, not a crutch.
+**Problem:** Teenagers increasingly rely on AI to complete work without learning. Educators need a way to use AI in the classroom that supports understanding instead of shortcuts.
+
+**Product value:** LyrningLMS gives teachers a single place to create assignments, quizzes, labs, and projects and to embed Google’s Gemini API with configurable guardrails. Students get AI help that stays within teacher-set restrictions, while teachers see metrics on understanding, engagement, and AI dependency. That lets educators spot over-reliance early and adjust support. The result: students build independent problem-solving skills while using AI as a learning aid, not a crutch.
+
+---
 
 ## Tech Stack
 
-**Frontend:**
-- React with TypeScript
-- Vite (build tool and dev server)
-- Modern component-based architecture
+Organized by layer:
 
-**Backend:**
-- Node.js runtime
-- Express.js (REST API framework)
-- PostgreSQL (relational database)
+| Layer | Technologies |
+|-------|--------------|
+| **Frontend** | React, TypeScript, Vite (build and dev server), component-based UI |
+| **Backend** | Node.js, Express.js (REST API) |
+| **Data** | PostgreSQL (relational database) |
+| **External** | Google Gemini API (AI learning assistance) |
 
-**External Services & APIs:**
-- Google Gemini API (AI-powered learning assistance)
+- **Frontend:** React with TypeScript; Vite for fast builds and HMR.
+- **Backend:** Node.js and Express for auth, classes, assignments, and enrollment.
+- **Database:** PostgreSQL with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
+- **APIs:** REST for the app; Gemini for in-assignment AI tutoring.
 
-## Architecture Diagram
+---
+
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         User Browser                             │
-│                    (Teacher/Student)                             │
+│                    (Teacher / Student)                            │
 └────────────────────────┬────────────────────────────────────────┘
-                         │ HTTP/HTTPS
+                         │ HTTP
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    React Frontend                                │
-│            (TypeScript + Vite Components)                        │
-│  - Assignment Management   - Student Grades                      │
-│  - Quiz Interface          - Learning Metrics                    │
+│                    React Frontend (Vite)                         │
+│  Class list · Class home · Assignments · Grades · Metrics · Info │
 └────────────────────────┬────────────────────────────────────────┘
-                         │ REST API Calls
+                         │ REST (JSON)
                          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│               Express.js Backend Server                          │
-│                    (Node.js)                                     │
-│  - Assignment API    - Student API                              │
-│  - Quiz API          - Gemini Integration                       │
+│               Express Backend (Node.js)                          │
+│  /api/auth  ·  /api/classes  (list, enroll by code, assignments)│
 └────┬───────────────────────────────────────────────────────┬────┘
-     │ SQL Queries                                           │ API Calls
-     ▼                                                       ▼
+     │ SQL                                                    │ HTTPS
+     ▼                                                        ▼
 ┌──────────────────┐                          ┌──────────────────────┐
 │   PostgreSQL     │                          │  Google Gemini API   │
-│    Database      │                          │   (AI Assistance)    │
+│   (lyrning DB)   │                          │  (AI tutor)          │
 └──────────────────┘                          └──────────────────────┘
 ```
 
+- **Browser:** Teachers and students use the same app; role is determined at login.
+- **Frontend:** SPA that calls the backend for auth, class list, enrollment, and assignments.
+- **Backend:** Serves REST endpoints; talks to PostgreSQL and (for AI) to Gemini.
+- **Database:** Holds users, classes, enrollments, assignments, and grades. **Class codes** (see below) allow students to join classes without exposing primary keys.
+
+---
+
+## Why Class Codes Was Added
+
+This was not in the original ERD design but has been added for the following reason:
+
+The database uses a **`class_code`** (e.g. `R7T4W9YZ`) on each class in addition to the primary key. We need a stable, shareable way for students to join a class without exposing internal IDs. Teachers share the class code; students enter it in “Add class.” The app looks up the class by `class_code` and creates the enrollment. Primary keys stay internal and are not shown or required from the user. 
+
+---
+
 ## Prerequisites
 
-To run LyrningLMS locally, ensure you have the following software installed:
+- **Node.js** (v18+) — [nodejs.org](https://nodejs.org)  
+  `node --version`
+- **npm** (included with Node)  
+  `npm --version`
+- **PostgreSQL** (v12+) — [postgresql.org/download](https://www.postgresql.org/download/)  
+  `psql --version` (and `psql` on your PATH)
+- **Google Gemini API key** (optional; **not required** for testing the vertical slice) — [ai.google.dev](https://ai.google.dev)
 
-- **Node.js** (v18 or higher) - [Download here](https://nodejs.org)
-  - Verify installation: `node --version`
-- **npm** (comes with Node.js)
-  - Verify installation: `npm --version`
-- **PostgreSQL** (v12 or higher) - [Download here](https://www.postgresql.org/download/)
-  - Verify installation: `psql --version`
-  - Ensure `psql` is available in your system PATH
-- **Google Gemini API Key** - [Get one here](https://ai.google.dev)
+---
 
-## Installation and Setup
+## Local Setup
 
-1. **Clone the repository and navigate to the project directory:**
-   ```bash
-   cd LyrningLMS
-   ```
+Do these in order.
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+### 1. Clone the Repository and install
 
-3. **Set up environment variables:**
-   - Create a `.env` file in the project root (this repo already includes one for local dev)
-   - Required values:
-     ```
-     DATABASE_URL=postgresql://postgres:admin@localhost:5432/lyrning
-     PORT=3001
-     NODE_ENV=development
-     GEMINI_API_KEY=your_gemini_api_key_here
-     ```
+```bash
+git clone [URL]
+cd LyrningLMS
+npm install
+```
 
-4. **Set up the database:**
-   ```bash
-   createdb lyrning
-   psql -U postgres -d lyrning -f backend/db/schema.sql
-   psql -U postgres -d lyrning -f backend/db/seed.sql
-   ```
+### 2. Environment
 
-## Running the Application
+Create a `.env` in the project root (or copy from `.env.example`):
 
-### Full Application (Backend + Frontend)
+```env
+DATABASE_URL=postgresql://postgres:admin@localhost:5432/lyrning
+PORT=4000
+NODE_ENV=development
+GEMINI_API_KEY=your_gemini_api_key_here
+```
 
-1. **Start both servers:**
-   ```bash
-   npm run dev
-   ```
+- Use your real PostgreSQL user/password/host if different.
+- `PORT` is the backend port (frontend uses this for API calls when `VITE_API_URL` is not set).
+- `GEMINI_API_KEY` is not required for testing the vertical slice (add a student to a class by class code).
 
-2. **Open your browser to:**
-   ```
-   http://localhost:3000
-   ```
+### 3. Database
 
-3. **Backend API is available at:**
-   ```
-   http://localhost:3001
-   ```
+Create the database and load schema and seed data:
 
-## Test Login Credentials
+```bash
+createdb lyrning
+psql -U postgres -d lyrning -f backend/db/schema.sql
+psql -U postgres -d lyrning -f backend/db/seed.sql
+```
 
-All seeded accounts use the same password: `password123`.
+If your DB uses a password (e.g. `admin`):
 
-**Teachers:**
-- `rdavis`
-- `jmiller`
-- `dwilson`
-- `landerson`
+```bash
+PGPASSWORD=admin createdb -U postgres -h localhost lyrning
+PGPASSWORD=admin psql -U postgres -h localhost -d lyrning -f backend/db/schema.sql
+PGPASSWORD=admin psql -U postgres -h localhost -d lyrning -f backend/db/seed.sql
+```
 
-**Students:**
-- `jsmith`
-- `sjohnson`
-- `mwilliams`
-- `ebrown`
+### 4. Run the app
 
-## Verifying the Vertical Slice
+```bash
+npm run dev
+```
 
-Once the full application is complete with backend and database, follow these steps to verify core functionality:
+Then open the URL printed in the terminal (e.g. **http://localhost:5173** or **http://localhost:3000**). The backend runs on the port in `.env` (default **4000**).
 
-1. **Create an Assignment (Teacher):**
-   - Log in as a teacher
-   - Navigate to the Assignment Editor
-   - Create a new assignment with AI restrictions and guidance parameters
-   - Set constraints on how the Gemini AI will respond
-   - Save the assignment
+---
 
-2. **Submit Work and Interact with AI (Student):**
-   - Log in as a student
-   - Navigate to the assignment
-   - Write a response or answer to the assignment prompt
-   - Request AI assistance and verify the AI responds within the teacher's configured restrictions
-   - Submit your work
+## Test Accounts
 
-3. **Verify Database Persistence:**
-   - Query the database directly to confirm the assignment and submission were saved:
-     ```bash
-     psql -d lyrninglms -c "SELECT * FROM assignments;"
-     psql -d lyrninglms -c "SELECT * FROM submissions;"
-     ```
+Passwords are hashed in the database; for testing you can log in as any account using **`password123`**.  
+On the login screen, choose **Student** or **Teacher** and use one of the usernames below.
 
-4. **Verify Data Persistence After Refresh:**
-   - Refresh the browser
-   - Navigate back to the assignment
-   - Confirm your submission and AI interaction history are still present
-   - Verify the teacher can see the student's submission in the grading interface
+| Role    | Username  |
+|---------|-----------|
+| Teacher | `sarah_b`, `james_ob`, `priya_s` |
+| Student | `alice_j`, `bob_m`, `chloe_p`, `david_n`, `emma_w`, `felix_c`, `grace_t`, `henry_d` |
+
+---
+
+## Verification: Enroll a Student via Class Code
+
+Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (Biology Honors) and **Student `emma_w`** (currently only in English Lit and Intro to CS).
+
+### Step 1 — Teacher: Get the class code
+
+1. Log in as **Teacher** with username **`priya_s`**, password **`password123`**.
+2. On “Classes I Teach,” click **Biology Honors - Period 1**.
+3. Under the main nav, open the **Info** subtab.
+4. In **Class code**, note the value (e.g. **`R7T4W9YZ`**). You can copy or type it when acting as the student.
+5. (Optional) Log out, or use a different browser/incognito for the student.
+
+### Step 2 — Student: Add the class
+
+1. Log in as **Student** with username **`emma_w`**, password **`password123`**.
+2. On “My Classes,” click **Add class**.
+3. Enter the class code from Step 1 (e.g. **`R7T4W9YZ`**). Case doesn’t matter.
+4. Click **Add class**.
+
+**Success:** The modal closes, the list refreshes, and **Biology Honors - Period 1** appears in Emma’s classes. Clicking it shows the class home and assignments.
+
+**If it fails:** “Invalid class code” means the code is wrong or the DB doesn’t have that class. “Already enrolled” means that student is already in that class.
+
+---
+
+## Verification: Core Flows
+
+- **Login:** Choose Student or Teacher, enter a username and `password123`. You should land on the class list (students: “My Classes”; teachers: “Classes I Teach”).
+- **Class home:** Click a class. You should see that class’s name in the header and a roadmap/assignments list. Teachers also see **Home** and **Info** subtabs.
+- **Teacher Info:** In a class, open the **Info** subtab. You should see class name, subject, description, **class code**, period, semester, and room.
+- **Database:** With the app running, you can confirm enrollment in PostgreSQL, e.g.  
+  `psql -U postgres -d lyrning -c "SELECT username, class_id FROM student_classes sc JOIN students s ON s.student_id = sc.student_id WHERE s.username = 'emma_w';"`  
+  After the enrollment steps above, Emma should have an extra row for the Biology class.
+
+---
+
+## Project Layout (high level)
+
+- **`frontend/`** — React app (components, services, types).
+- **`backend/`** — Express server and routes (`auth`, `classes`), DB connection and queries.
+- **`backend/db/`** — `schema.sql`, `seed.sql`, optional migration scripts.
+
+A new teammate can run the project by: installing Node and PostgreSQL, copying `.env`, creating and seeding the DB, and running `npm run dev`, then following the verification steps above.

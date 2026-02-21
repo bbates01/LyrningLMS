@@ -6,7 +6,9 @@ export enum UserRole {
 
 export type ViewState = 
   | 'LOGIN'
+  | 'CLASS_SELECT'
   | 'HOME' 
+  | 'CLASS_INFO'
   | 'GRADES_LIST' 
   | 'STUDENT_GRADES' 
   | 'ASSIGNMENT_LIST' 
@@ -14,6 +16,20 @@ export type ViewState =
   | 'ASSIGNMENT_VIEW' 
   | 'METRICS_LIST' 
   | 'STUDENT_METRICS';
+
+/** Class/course from API (student's enrolled or teacher's taught) */
+export interface ClassSummary {
+  class_id: number;
+  class_code?: string;
+  class_name: string;
+  period: string | null;
+  semester: string | null;
+  room_number: string | null;
+  subject_code: string;
+  subject_description?: string | null;
+  teacher_first_name?: string;
+  teacher_last_name?: string;
+}
 
 export interface Student {
   id: string | number;
@@ -40,7 +56,7 @@ export interface Assignment {
   id: string;
   title: string;
   description?: string;
-  type: 'Homework' | 'Quiz' | 'Project' | 'Lab';
+  type: 'Homework' | 'Quiz' | 'Project' | 'Lab' | string;
   dueDate: string;
   score?: string;
   content?: string;

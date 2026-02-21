@@ -34,14 +34,14 @@ INSERT INTO subjects (subject_code, description, credits) VALUES
 ('CS101',   'Introduction to Computer Science',   3.0);
 
 -- -----------------------------------------------
--- Classes  (subject_id, teacher_id)
+-- Classes  (class_code, subject_id, teacher_id)
 -- -----------------------------------------------
-INSERT INTO classes (subject_id, teacher_id, class_name, period, semester, room_number) VALUES
-(1, 1, 'Algebra II - Period 2',          'Period 2', 'Fall 2025',   '101'),
-(2, 2, 'English Lit - Period 4',         'Period 4', 'Fall 2025',   '204'),
-(3, 3, 'Biology Honors - Period 1',      'Period 1', 'Fall 2025',   'Lab B'),
-(5, 1, 'Intro to CS - Period 6',         'Period 6', 'Fall 2025',   'Lab A'),
-(4, 2, 'World History - Period 3',       'Period 3', 'Spring 2026', '205');
+INSERT INTO classes (class_code, subject_id, teacher_id, class_name, period, semester, room_number) VALUES
+('JX5H921E', 1, 1, 'Algebra II - Period 2',          'Period 2', 'Fall 2025',   '101'),
+('K2M8N3PQ', 2, 2, 'English Lit - Period 4',         'Period 4', 'Fall 2025',   '204'),
+('R7T4W9YZ', 3, 3, 'Biology Honors - Period 1',      'Period 1', 'Fall 2025',   'Lab B'),
+('L1P6Q0S2', 5, 1, 'Intro to CS - Period 6',         'Period 6', 'Fall 2025',   'Lab A'),
+('U3V8X1AB', 4, 2, 'World History - Period 3',       'Period 3', 'Spring 2026', '205');
 
 -- -----------------------------------------------
 -- Student Classes (student_id, class_id)
