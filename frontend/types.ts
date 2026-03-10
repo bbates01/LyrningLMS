@@ -1,23 +1,17 @@
 
 export enum UserRole {
   TEACHER = 'TEACHER',
-  STUDENT = 'STUDENT'
 }
 
-export type ViewState = 
+export type ViewState =
   | 'LOGIN'
   | 'CLASS_SELECT'
-  | 'HOME' 
   | 'CLASS_INFO'
-  | 'GRADES_LIST' 
-  | 'STUDENT_GRADES' 
-  | 'ASSIGNMENT_LIST' 
-  | 'ASSIGNMENT_EDIT' 
-  | 'ASSIGNMENT_VIEW' 
-  | 'METRICS_LIST' 
-  | 'STUDENT_METRICS';
+  | 'ASSIGNMENT_LIST'
+  | 'ASSIGNMENT_EDIT'
+  | 'ASSIGNMENT_VIEW';
 
-/** Class/course from API (student's enrolled or teacher's taught) */
+/** Class/course from API (teacher's taught classes) */
 export interface ClassSummary {
   class_id: number;
   class_code?: string;
@@ -49,14 +43,13 @@ export interface UserSession {
   firstName?: string;
   lastName?: string;
   email?: string;
-  studentData?: Student;
 }
 
 export interface Assignment {
   id: string;
   title: string;
   description?: string;
-  type: 'Homework' | 'Quiz' | 'Project' | 'Lab' | string;
+  type: 'Homework' | 'Quiz' | 'Exam' | 'Project' | 'Lab' | string;
   dueDate: string;
   score?: string;
   content?: string;

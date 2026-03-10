@@ -1,14 +1,14 @@
 
-import { 
-  Home, 
-  GraduationCap, 
-  BookOpen, 
-  MessageSquare, 
-  BarChart3, 
-  User, 
-  ChevronDown, 
-  Plus, 
-  Upload, 
+import {
+  Home,
+  GraduationCap,
+  BookOpen,
+  MessageSquare,
+  BarChart3,
+  User,
+  ChevronDown,
+  Plus,
+  Upload,
   Send,
   ArrowRight,
   Pencil,
@@ -17,19 +17,20 @@ import {
   Code,
   CheckCircle2,
   Circle,
-  HelpCircle
+  HelpCircle,
+  Trash2
 } from 'lucide-react';
 
-export { 
-  Home, 
-  GraduationCap, 
-  BookOpen, 
-  MessageSquare, 
-  BarChart3, 
-  User, 
-  ChevronDown, 
-  Plus, 
-  Upload, 
+export {
+  Home,
+  GraduationCap,
+  BookOpen,
+  MessageSquare,
+  BarChart3,
+  User,
+  ChevronDown,
+  Plus,
+  Upload,
   Send,
   ArrowRight,
   Pencil,
@@ -38,5 +39,6 @@ export {
   Code,
   CheckCircle2,
   Circle,
-  HelpCircle
+  HelpCircle,
+  Trash2
 };
