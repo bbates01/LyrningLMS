@@ -9,7 +9,7 @@ import {
   Circle,
   HelpCircle
 } from './Icons';
-import { Assignment, UserRole } from '../types';
+import { Assignment } from '../types';
 import { chatWithTutor } from '../services/geminiService';
 import { COLORS } from '../constants';
 

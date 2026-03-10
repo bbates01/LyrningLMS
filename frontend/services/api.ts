@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export async function fetchStudentClasses(studentId: number): Promise<any[]> {
   const res = await fetch(`${API_BASE}/api/classes/student/${studentId}`);
