@@ -64,6 +64,15 @@ CREATE TABLE assignments (
     due_date        TEXT
 );
 
+-- Assignment PDF documents (stored in DB as BLOB)
+CREATE TABLE assignment_documents (
+    assignment_id INTEGER PRIMARY KEY REFERENCES assignments(assignment_id) ON DELETE CASCADE,
+    filename      TEXT,
+    mime_type     TEXT NOT NULL DEFAULT 'application/pdf',
+    pdf_blob      BLOB NOT NULL,
+    uploaded_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Student Grades (per assignment)
 CREATE TABLE student_grades (
     student_id          INTEGER          NOT NULL REFERENCES students(student_id),

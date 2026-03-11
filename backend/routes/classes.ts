@@ -1,7 +1,9 @@
 import express from 'express';
+import multer from 'multer';
 import { query } from '../db/connection.js';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // POST /api/classes/enroll — student enrolls in a class by class_code
 router.post('/enroll', async (req, res) => {
@@ -117,6 +119,173 @@ router.get('/:classId/assignments', async (req, res) => {
   } catch (err) {
     console.error('Error fetching class assignments:', err);
     res.status(500).json({ error: 'Failed to fetch assignments' });
+  }
+});
+
+// POST /api/classes/:classId/assignments — teacher creates an assignment for a class
+router.post('/:classId/assignments', async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const {
+      teacherId,
+      assignmentName,
+      description,
+      type,
+      maxPoints,
+      dueDate,
+    } = req.body as {
+      teacherId?: number;
+      assignmentName?: string;
+      description?: string;
+      type?: string;
+      maxPoints?: number;
+      dueDate?: string;
+    };
+
+    if (teacherId == null || !assignmentName) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'teacherId and assignmentName are required' });
+    }
+
+    // Make sure this teacher actually owns the class
+    const classCheck = await query(
+      'SELECT class_id FROM classes WHERE class_id = $1 AND teacher_id = $2',
+      [classId, teacherId]
+    );
+
+    if (classCheck.rows.length === 0) {
+      return res
+        .status(403)
+        .json({ success: false, error: 'You are not allowed to add assignments to this class' });
+    }
+
+    const insertResult = await query(
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date`,
+      [
+        classId,
+        assignmentName,
+        description ?? null,
+        type ?? null,
+        maxPoints ?? 100,
+        dueDate ?? null,
+      ]
+    );
+
+    return res.status(201).json({ success: true, assignment: insertResult.rows[0] });
+  } catch (err) {
+    console.error('Error creating assignment:', err);
+    res.status(500).json({ success: false, error: 'Failed to create assignment' });
+  }
+});
+
+// POST /api/classes/:classId/assignments/pdf — teacher uploads an assignment PDF (stored as BLOB)
+router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const { teacherId, assignmentName, description, type, maxPoints, dueDate } = req.body as {
+      teacherId?: string | number;
+      assignmentName?: string;
+      description?: string;
+      type?: string;
+      maxPoints?: string | number;
+      dueDate?: string;
+    };
+
+    const teacherIdNum = teacherId == null ? null : Number(teacherId);
+    const maxPointsNum = maxPoints == null ? null : Number(maxPoints);
+
+    if (teacherIdNum == null || Number.isNaN(teacherIdNum) || !assignmentName) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'teacherId and assignmentName are required' });
+    }
+
+    if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
+      return res.status(400).json({ success: false, error: 'A pdf file is required (field name: pdf)' });
+    }
+
+    if (req.file.mimetype !== 'application/pdf') {
+      return res.status(400).json({ success: false, error: 'Only application/pdf is supported' });
+    }
+
+    // Make sure this teacher actually owns the class
+    const classCheck = await query(
+      'SELECT class_id FROM classes WHERE class_id = $1 AND teacher_id = $2',
+      [classId, teacherIdNum]
+    );
+    if (classCheck.rows.length === 0) {
+      return res
+        .status(403)
+        .json({ success: false, error: 'You are not allowed to add assignments to this class' });
+    }
+
+    // Create the assignment row
+    const created = await query(
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date`,
+      [
+        classId,
+        assignmentName,
+        description ?? null,
+        type ?? null,
+        maxPointsNum == null || Number.isNaN(maxPointsNum) ? 100 : maxPointsNum,
+        dueDate ?? null,
+      ]
+    );
+
+    const assignment = created.rows[0];
+    if (!assignment?.assignment_id) {
+      return res.status(500).json({ success: false, error: 'Failed to create assignment' });
+    }
+
+    // Store the PDF blob
+    await query(
+      `INSERT INTO assignment_documents (assignment_id, filename, mime_type, pdf_blob)
+       VALUES ($1, $2, $3, $4)`,
+      [assignment.assignment_id, req.file.originalname ?? null, req.file.mimetype, req.file.buffer]
+    );
+
+    return res.status(201).json({ success: true, assignmentId: assignment.assignment_id });
+  } catch (err) {
+    console.error('Error uploading assignment PDF:', err);
+    res.status(500).json({ success: false, error: 'Failed to upload assignment PDF' });
+  }
+});
+
+// GET /api/classes/assignments/:assignmentId/pdf — download the stored assignment PDF
+router.get('/assignments/:assignmentId/pdf', async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const result = await query(
+      `SELECT d.pdf_blob, d.mime_type, d.filename
+       FROM assignment_documents d
+       WHERE d.assignment_id = $1`,
+      [assignmentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'PDF not found' });
+    }
+
+    const row = result.rows[0] as {
+      pdf_blob: Buffer;
+      mime_type: string;
+      filename?: string | null;
+    };
+
+    res.setHeader('Content-Type', row.mime_type || 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${(row.filename || `assignment-${assignmentId}.pdf`).replace(/"/g, '')}"`
+    );
+    return res.send(row.pdf_blob);
+  } catch (err) {
+    console.error('Error downloading assignment PDF:', err);
+    res.status(500).json({ error: 'Failed to download PDF' });
   }
 });
 

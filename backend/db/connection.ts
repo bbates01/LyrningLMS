@@ -21,8 +21,14 @@ function toSqliteParams(text: string, params?: any[]): [string, any[]] {
 export function query(text: string, params?: any[]): Promise<{ rows: any[] }> {
   const [sql, bound] = toSqliteParams(text, params);
   const stmt = db.prepare(sql);
-  const rows = stmt.all(...bound);
-  return Promise.resolve({ rows });
+  // better-sqlite3 exposes whether a statement returns rows via stmt.reader
+  if (stmt.reader) {
+    const rows = stmt.all(...bound);
+    return Promise.resolve({ rows });
+  }
+
+  stmt.run(...bound);
+  return Promise.resolve({ rows: [] });
 }
 
 export default db;
