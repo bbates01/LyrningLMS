@@ -34,3 +34,22 @@ export async function enrollStudentByClassCode(studentId: number, classCode: str
   if (!res.ok) return { success: false, error: data.error || 'Enrollment failed' };
   return { success: true };
 }
+
+export async function uploadAssignmentPdf(
+  classId: number,
+  teacherId: number,
+  file: File,
+  assignmentName: string,
+): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
+  const formData = new FormData();
+  formData.append('pdf', file);
+  formData.append('teacherId', String(teacherId));
+  formData.append('assignmentName', assignmentName);
+  const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments/pdf`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) return { success: false, error: data.error || 'Upload failed' };
+  return { success: true, assignmentId: data.assignmentId };
+}
