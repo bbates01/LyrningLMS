@@ -1,94 +1,94 @@
 -- ============================================================
--- Lyrning - Learning Management Database Schema
+-- Lyrning - Learning Management Database Schema (SQLite)
 -- ============================================================
 
 -- Students
 CREATE TABLE students (
-    student_id    SERIAL PRIMARY KEY,
-    first_name    VARCHAR(100) NOT NULL,
-    last_name     VARCHAR(100) NOT NULL,
-    email         VARCHAR(255) NOT NULL UNIQUE,
-    username      VARCHAR(100) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    date_of_birth DATE NOT NULL
+    student_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_name    TEXT NOT NULL,
+    last_name     TEXT NOT NULL,
+    email         TEXT NOT NULL UNIQUE,
+    username      TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    date_of_birth TEXT NOT NULL
 );
 
 -- Teachers
 CREATE TABLE teachers (
-    teacher_id    SERIAL PRIMARY KEY,
-    first_name    VARCHAR(100) NOT NULL,
-    last_name     VARCHAR(100) NOT NULL,
-    email         VARCHAR(255) NOT NULL UNIQUE,
-    username      VARCHAR(100) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    date_of_birth DATE NOT NULL
+    teacher_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    first_name    TEXT NOT NULL,
+    last_name     TEXT NOT NULL,
+    email         TEXT NOT NULL UNIQUE,
+    username      TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    date_of_birth TEXT NOT NULL
 );
 
 -- Subjects
 CREATE TABLE subjects (
-    subject_id   SERIAL PRIMARY KEY,
-    subject_code VARCHAR(20)  NOT NULL UNIQUE,
+    subject_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_code TEXT  NOT NULL UNIQUE,
     description  TEXT,
-    credits      NUMERIC(4,2) NOT NULL DEFAULT 3.0
+    credits      REAL NOT NULL DEFAULT 3.0
 );
 
 -- Classes
 CREATE TABLE classes (
-    class_id     SERIAL PRIMARY KEY,
-    class_code   VARCHAR(20)  NOT NULL UNIQUE,
-    subject_id   INT  NOT NULL REFERENCES subjects(subject_id),
-    teacher_id   INT  NOT NULL REFERENCES teachers(teacher_id),
-    class_name   VARCHAR(150) NOT NULL,
-    period       VARCHAR(50),
-    semester     VARCHAR(50),
-    room_number  VARCHAR(20)
+    class_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_code   TEXT  NOT NULL UNIQUE,
+    subject_id   INTEGER  NOT NULL REFERENCES subjects(subject_id),
+    teacher_id   INTEGER  NOT NULL REFERENCES teachers(teacher_id),
+    class_name   TEXT NOT NULL,
+    period       TEXT,
+    semester     TEXT,
+    room_number  TEXT
 );
 
 -- Student ↔ Class enrollment
 CREATE TABLE student_classes (
-    student_id      INT  NOT NULL REFERENCES students(student_id),
-    class_id        INT  NOT NULL REFERENCES classes(class_id),
-    enrollment_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    status          VARCHAR(30) NOT NULL DEFAULT 'active',
+    student_id      INTEGER  NOT NULL REFERENCES students(student_id),
+    class_id        INTEGER  NOT NULL REFERENCES classes(class_id),
+    enrollment_date TEXT NOT NULL DEFAULT (date('now')),
+    status          TEXT NOT NULL DEFAULT 'active',
     PRIMARY KEY (student_id, class_id)
 );
 
 -- Assignments
 CREATE TABLE assignments (
-    assignment_id   SERIAL PRIMARY KEY,
-    class_id        INT          NOT NULL REFERENCES classes(class_id),
-    assignment_name VARCHAR(200) NOT NULL,
+    assignment_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_id        INTEGER          NOT NULL REFERENCES classes(class_id),
+    assignment_name TEXT NOT NULL,
     description     TEXT,
-    type            VARCHAR(50),
-    max_points      NUMERIC(6,2) NOT NULL DEFAULT 100,
-    due_date        TIMESTAMP
+    type            TEXT,
+    max_points      REAL NOT NULL DEFAULT 100,
+    due_date        TEXT
 );
 
 -- Student Grades (per assignment)
 CREATE TABLE student_grades (
-    student_id          INT          NOT NULL REFERENCES students(student_id),
-    assignment_id       INT          NOT NULL REFERENCES assignments(assignment_id),
-    points_earned       NUMERIC(6,2),
-    percentage          NUMERIC(5,2),
-    letter_grade        VARCHAR(5),
-    submission_date     TIMESTAMP,
-    graded_date         TIMESTAMP,
-    understanding_score NUMERIC(3,1),
-    ai_dependency_score NUMERIC(3,1),
-    engagement_score    NUMERIC(3,1),
+    student_id          INTEGER          NOT NULL REFERENCES students(student_id),
+    assignment_id       INTEGER          NOT NULL REFERENCES assignments(assignment_id),
+    points_earned       REAL,
+    percentage          REAL,
+    letter_grade        TEXT,
+    submission_date     TEXT,
+    graded_date         TEXT,
+    understanding_score REAL,
+    ai_dependency_score REAL,
+    engagement_score    REAL,
     PRIMARY KEY (student_id, assignment_id)
 );
 
 -- Student Metrics (weekly rollup per class)
 CREATE TABLE student_metrics (
-    student_id          INT  NOT NULL REFERENCES students(student_id),
-    class_id            INT  NOT NULL REFERENCES classes(class_id),
-    week_number         INT  NOT NULL,
-    week_start_date     DATE,
-    week_end_date       DATE,
-    understanding_score NUMERIC(3,1),
-    ai_dependency_score NUMERIC(3,1),
-    engagement_score    NUMERIC(3,1),
+    student_id          INTEGER  NOT NULL REFERENCES students(student_id),
+    class_id            INTEGER  NOT NULL REFERENCES classes(class_id),
+    week_number         INTEGER  NOT NULL,
+    week_start_date     TEXT,
+    week_end_date       TEXT,
+    understanding_score REAL,
+    ai_dependency_score REAL,
+    engagement_score    REAL,
     notes               TEXT,
     PRIMARY KEY (student_id, class_id, week_number)
 );

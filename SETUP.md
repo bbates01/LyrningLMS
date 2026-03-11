@@ -3,136 +3,136 @@
 ## Prerequisites
 
 1. **Node.js** (v18+)
-2. **PostgreSQL** database running locally
-3. The database credentials in `.env` should match your PostgreSQL setup
-
-## Database Setup
-
-1. Create the database:
-   ```bash
-   createdb lyrning
-   ```
-
-2. Run the schema to create tables:
-   ```bash
-   psql -U postgres -d lyrning -f backend/db/schema.sql
-   ```
-
-3. Seed the database with test data:
-   ```bash
-   psql -U postgres -d lyrning -f backend/db/seed.sql
-   ```
+2. No separate database server — the app uses **SQLite** (a single file in `backend/db/`).
 
 ## Installation
 
 Install all dependencies:
+
 ```bash
 npm install
 ```
 
+## Database Setup
+
+Initialize the SQLite database (creates tables and seed data):
+
+```bash
+npm run db:init
+```
+
+This creates (or resets) `backend/db/lyrning.sqlite`. Run it again anytime to reset the DB to a fresh seeded state.
+
 ## Environment Variables
 
-The `.env` file is already configured for local development:
+Copy `.env.example` to `.env` and adjust if needed:
+
 ```
-DATABASE_URL=postgresql://postgres:admin@localhost:5432/lyrning
-PORT=4000
+SQLITE_DB_PATH=./backend/db/lyrning.sqlite
+PORT=3001
+VITE_API_URL=http://localhost:3001
 NODE_ENV=development
 ```
 
-Adjust `DATABASE_URL` if your PostgreSQL credentials are different.
+- `SQLITE_DB_PATH` — path to the SQLite file (default: `./backend/db/lyrning.sqlite`).
+- `PORT` — backend port (frontend uses `VITE_API_URL` for API calls).
 
 ## Running the Application
 
 ### Option 1: Run Both Backend & Frontend Together
+
 ```bash
 npm run dev
 ```
-This runs the backend server on `http://localhost:4000` and frontend on `http://localhost:5173`
+
+Backend runs on the port in `.env` (e.g. **3001**), frontend on **http://localhost:5173**.
 
 ### Option 2: Run Them Separately
-Terminal 1 - Backend:
+
+Terminal 1 — Backend:
+
 ```bash
 npm run dev:backend
 ```
 
-Terminal 2 - Frontend:
+Terminal 2 — Frontend:
+
 ```bash
 npm run dev:frontend
 ```
 
 ## Login Credentials
 
-After seeding, you can log in with:
+After seeding, you can log in with (password for all: **password123**):
 
-**Students:**
-- Username: `jsmith`, `sjohnson`, `mwilliams`, or `ebrown`
-- Password: `password123`
+**Students:** `alice_j`, `bob_m`, `chloe_p`, `david_n`, `emma_w`, `felix_c`, `grace_t`, `henry_d`
 
-**Teachers:**
-- Username: `rdavis`, `jmiller`, `dwilson`, or `landerson`
-- Password: `password123`
+**Teachers:** `sarah_b`, `james_ob`, `priya_s`
 
 ## Project Structure
 
 ```
 ├── backend/
 │   ├── db/
-│   │   ├── connection.ts     # Database connection pool
-│   │   ├── schema.sql        # Database schema
-│   │   └── seed.sql          # Test data
+│   │   ├── connection.ts     # SQLite connection and query helper
+│   │   ├── schema.sql        # Database schema (SQLite)
+│   │   ├── seed.sql          # Test data
+│   │   ├── init-db.ts        # Script to create/reset DB (npm run db:init)
+│   │   └── lyrning.sqlite    # SQLite database file (created by db:init)
 │   ├── routes/
-│   │   └── auth.ts           # Authentication endpoints
-│   ├── types.ts              # TypeScript interfaces
-│   ├── server.ts             # Express server
-│   └── tsconfig.json         # Backend TypeScript config
+│   ├── types.ts
+│   ├── server.ts
+│   └── tsconfig.json
 ├── frontend/
-│   ├── components/           # React components
-│   ├── services/             # Services (Gemini API, etc.)
-│   ├── index.tsx             # Frontend entry point
-│   └── types.ts              # Frontend types
+│   ├── components/
+│   ├── services/
+│   └── ...
 ├── package.json
-├── .env                      # Environment variables (local)
-└── .env.example              # Environment template
+├── .env
+└── .env.example
 ```
 
 ## API Endpoints
 
 ### Authentication
-- **POST** `/api/auth/login` - Authenticate a user
+
+- **POST** `/api/auth/login` — Authenticate a user
 
 Request body:
+
 ```json
 {
-  "username": "jsmith",
+  "username": "alice_j",
   "password": "password123",
   "userType": "student"
 }
 ```
 
 Response:
+
 ```json
 {
   "success": true,
   "role": "student",
   "userId": 1,
-  "userName": "jsmith",
-  "firstName": "John",
-  "lastName": "Smith",
-  "email": "john.smith@example.com"
+  "userName": "alice_j",
+  "firstName": "Alice",
+  "lastName": "Johnson",
+  "email": "alice.johnson@school.edu"
 }
 ```
 
 ## Troubleshooting
 
-### Backend connection error
-- Make sure PostgreSQL is running
-- Check that the database exists: `psql -l | grep lyrning`
-- Verify database credentials in `.env`
+### Backend can't find the database
+
+- Run `npm run db:init` from the project root.
+- Ensure `SQLITE_DB_PATH` in `.env` points to a path the app can write to (e.g. `./backend/db/lyrning.sqlite`).
 
 ### Port already in use
-- Backend defaults to port 4000, frontend to 5173
-- To change, update `.env` (backend) or `frontend/vite.config.ts` (frontend)
+
+- Change `PORT` in `.env` (backend) and `VITE_API_URL` if needed; frontend port is in `frontend/vite.config.ts`.
 
 ### CORS errors
-- The backend CORS is configured to allow requests from `http://localhost:5173`
-- For other origins, update the CORS middleware in `backend/server.ts`
+
+- Backend CORS is set for the frontend origin (e.g. `http://localhost:5173`). For other origins, update CORS in `backend/server.ts`.

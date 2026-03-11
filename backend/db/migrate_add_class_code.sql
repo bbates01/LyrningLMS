@@ -1,5 +1,6 @@
--- Migration: add class_code to classes (run when DB is in use and you can't drop/recreate)
--- Run with: PGPASSWORD=admin psql -U postgres -h localhost -d lyrning -f backend/db/migrate_add_class_code.sql
+-- Migration: add class_code to classes (PostgreSQL only; not used with SQLite)
+-- For PostgreSQL only. Run with: psql -U postgres -h localhost -d lyrning -f backend/db/migrate_add_class_code.sql
+-- SQLite schema already includes class_code; use npm run db:init for SQLite.
 
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS class_code VARCHAR(20);
 

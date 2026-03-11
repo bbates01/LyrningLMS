@@ -22,12 +22,12 @@ Organized by layer:
 |-------|--------------|
 | **Frontend** | React, TypeScript, Vite (build and dev server), component-based UI |
 | **Backend** | Node.js, Express.js (REST API) |
-| **Data** | PostgreSQL (relational database) |
+| **Data** | SQLite (relational database, single file) |
 | **External** | Google Gemini API (AI learning assistance) |
 
 - **Frontend:** React with TypeScript; Vite for fast builds and HMR.
 - **Backend:** Node.js and Express for auth, classes, assignments, and enrollment.
-- **Database:** PostgreSQL with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
+- **Database:** SQLite with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
 - **APIs:** REST for the app; Gemini for in-assignment AI tutoring.
 
 ---
@@ -54,14 +54,14 @@ Organized by layer:
      │ SQL                                                    │ HTTPS
      ▼                                                        ▼
 ┌──────────────────┐                          ┌──────────────────────┐
-│   PostgreSQL     │                          │  Google Gemini API   │
-│   (lyrning DB)   │                          │  (AI tutor)          │
+│   SQLite         │                          │  Google Gemini API   │
+│   (lyrning.sqlite) │                         │  (AI tutor)          │
 └──────────────────┘                          └──────────────────────┘
 ```
 
 - **Browser:** Teachers and students use the same app; role is determined at login.
 - **Frontend:** SPA that calls the backend for auth, class list, enrollment, and assignments.
-- **Backend:** Serves REST endpoints; talks to PostgreSQL and (for AI) to Gemini.
+- **Backend:** Serves REST endpoints; talks to SQLite and (for AI) to Gemini.
 - **Database:** Holds users, classes, enrollments, assignments, and grades. **Class codes** (see below) allow students to join classes without exposing primary keys.
 
 ---
@@ -80,9 +80,9 @@ The database uses a **`class_code`** (e.g. `R7T4W9YZ`) on each class in addition
   `node --version`
 - **npm** (included with Node)  
   `npm --version`
-- **PostgreSQL** (v12+) — [postgresql.org/download](https://www.postgresql.org/download/)  
-  `psql --version` (and `psql` on your PATH)
 - **Google Gemini API key** (optional; **not required** for testing the vertical slice) — [ai.google.dev](https://ai.google.dev)
+
+No separate database server is required; the app uses **SQLite** (single file).
 
 ---
 
@@ -103,32 +103,23 @@ npm install
 Create a `.env` in the project root (or copy from `.env.example`):
 
 ```env
-DATABASE_URL=postgresql://postgres:admin@localhost:5432/lyrning
-PORT=4000
+SQLITE_DB_PATH=./backend/db/lyrning.sqlite
+PORT=3001
+VITE_API_URL=http://localhost:3001
 NODE_ENV=development
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-- Use your real PostgreSQL user/password/host if different.
-- `PORT` is the backend port (frontend uses this for API calls when `VITE_API_URL` is not set).
+- `SQLITE_DB_PATH` is the path to the SQLite database file (default: `./backend/db/lyrning.sqlite`).
+- `PORT` is the backend port. Set `VITE_API_URL` to the same base URL (e.g. `http://localhost:3001`) so the frontend can reach the API.
 - `GEMINI_API_KEY` is not required for testing the vertical slice (add a student to a class by class code).
 
 ### 3. Database
 
-Create the database and load schema and seed data:
+Initialize the SQLite database (creates tables and seed data):
 
 ```bash
-createdb lyrning
-psql -U postgres -d lyrning -f backend/db/schema.sql
-psql -U postgres -d lyrning -f backend/db/seed.sql
-```
-
-If your DB uses a password (e.g. `admin`):
-
-```bash
-PGPASSWORD=admin createdb -U postgres -h localhost lyrning
-PGPASSWORD=admin psql -U postgres -h localhost -d lyrning -f backend/db/schema.sql
-PGPASSWORD=admin psql -U postgres -h localhost -d lyrning -f backend/db/seed.sql
+npm run db:init
 ```
 
 ### 4. Run the app
@@ -137,7 +128,7 @@ PGPASSWORD=admin psql -U postgres -h localhost -d lyrning -f backend/db/seed.sql
 npm run dev
 ```
 
-Then open the URL printed in the terminal (e.g. **http://localhost:5173** or **http://localhost:3000**). The backend runs on the port in `.env` (default **4000**).
+Then open the URL printed in the terminal (e.g. **http://localhost:5173** or **http://localhost:3000**). The backend runs on the port in `.env` (default **3001**).
 
 ---
 
@@ -183,8 +174,8 @@ Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (
 - **Login:** Choose Student or Teacher, enter a username and `password123`. You should land on the class list (students: “My Classes”; teachers: “Classes I Teach”).
 - **Class home:** Click a class. You should see that class’s name in the header and a roadmap/assignments list. Teachers also see **Home** and **Info** subtabs.
 - **Teacher Info:** In a class, open the **Info** subtab. You should see class name, subject, description, **class code**, period, semester, and room.
-- **Database:** With the app running, you can confirm enrollment in PostgreSQL, e.g.  
-  `psql -U postgres -d lyrning -c "SELECT username, class_id FROM student_classes sc JOIN students s ON s.student_id = sc.student_id WHERE s.username = 'emma_w';"`  
+- **Database:** With the app running, you can confirm enrollment in SQLite, e.g.  
+  `sqlite3 backend/db/lyrning.sqlite "SELECT username, class_id FROM student_classes sc JOIN students s ON s.student_id = sc.student_id WHERE s.username = 'emma_w';"`  
   After the enrollment steps above, Emma should have an extra row for the Biology class.
 
 ---
@@ -195,4 +186,4 @@ Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (
 - **`backend/`** — Express server and routes (`auth`, `classes`), DB connection and queries.
 - **`backend/db/`** — `schema.sql`, `seed.sql`, optional migration scripts.
 
-A new teammate can run the project by: installing Node and PostgreSQL, copying `.env`, creating and seeding the DB, and running `npm run dev`, then following the verification steps above.
+A new teammate can run the project by: installing Node, copying `.env`, running `npm run db:init`, and running `npm run dev`, then following the verification steps above.

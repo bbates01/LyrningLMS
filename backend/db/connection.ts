@@ -1,16 +1,28 @@
-import pkg from 'pg';
+import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
-
-const { Pool } = pkg;
+import path from 'path';
 
 dotenv.config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const dbPath =
+  process.env.SQLITE_DB_PATH ||
+  path.join(process.cwd(), 'backend', 'db', 'lyrning.sqlite');
 
-export const query = (text: string, params?: any[]) => {
-  return pool.query(text, params);
-};
+const db = new Database(dbPath);
+db.pragma('foreign_keys = ON');
 
-export default pool;
+/** Convert Postgres-style $1, $2 placeholders to SQLite ? and return ordered param list */
+function toSqliteParams(text: string, params?: any[]): [string, any[]] {
+  if (!params || params.length === 0) return [text, []];
+  const sql = text.replace(/\$(\d+)/g, '?');
+  return [sql, params];
+}
+
+export function query(text: string, params?: any[]): Promise<{ rows: any[] }> {
+  const [sql, bound] = toSqliteParams(text, params);
+  const stmt = db.prepare(sql);
+  const rows = stmt.all(...bound);
+  return Promise.resolve({ rows });
+}
+
+export default db;
