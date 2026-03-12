@@ -184,7 +184,12 @@ const App: React.FC = () => {
       case 'ASSIGNMENT_LIST':
         return renderAssignmentList();
       case 'ASSIGNMENT_EDIT':
-        return <AssignmentEditor />;
+        return (
+          <AssignmentEditor
+            classId={selectedClass?.class_id ?? 0}
+            teacherId={session.userId ?? 0}
+          />
+        );
       case 'ASSIGNMENT_VIEW':
         return selectedAssignment
           ? <AssignmentView assignment={selectedAssignment} onViewTeacherMode={() => setView('ASSIGNMENT_EDIT')} />

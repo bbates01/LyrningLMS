@@ -1,5 +1,79 @@
 import React, { useState, useRef } from 'react';
 
+<<<<<<< logan/upload-assignment-info
+import React, { useRef, useState } from 'react';
+import { Pencil, Plus, Upload, CheckCircle2 } from './Icons';
+import { generateAssignment } from '../services/geminiService';
+import { uploadAssignmentPdf } from '../services/api';
+
+interface Props {
+  classId: number;
+  teacherId: number;
+}
+
+interface UploadedFile {
+  name: string;
+  assignmentId: number;
+}
+
+const AssignmentEditor: React.FC<Props> = ({ classId, teacherId }) => {
+  const [title, setTitle] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [result, setResult] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    const fileNames = uploadedFiles.map((f) => f.name);
+    const generated = await generateAssignment(title || 'Algebra Basics', fileNames);
+    setResult(generated);
+    setIsGenerating(false);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so the same file can be re-selected if needed
+    e.target.value = '';
+
+    if (!title.trim()) {
+      setUploadError('Please enter an assignment title before uploading a file.');
+      return;
+    }
+
+    setUploadError('');
+    setIsUploading(true);
+
+    const res = await uploadAssignmentPdf(classId, teacherId, file, title.trim());
+
+    setIsUploading(false);
+
+    if (!res.success || res.assignmentId == null) {
+      setUploadError(res.error || 'Upload failed. Please try again.');
+      return;
+    }
+
+    setUploadedFiles((prev) => [...prev, { name: file.name, assignmentId: res.assignmentId! }]);
+  };
+
+  return (
+    <div className="space-y-12">
+      <div className="flex items-center gap-2 border-b-2 border-gray-900 pb-2 max-w-md">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="ADD ASSIGNMENT TITLE"
+          className="text-2xl font-bold bg-transparent focus:outline-none flex-1 placeholder:text-gray-300"
+        />
+        <Pencil className="w-6 h-6 text-gray-500" />
+      </div>
+=======
 const BRAND = '#D96B6B';
 const BRAND_LIGHT = '#F2DADA';
 const BG = '#FFFFFF';
@@ -57,6 +131,7 @@ export default function AssignmentEditor() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
+>>>>>>> main
 
         /* ── Top nav bar ── */
         .lyr-nav {
@@ -346,6 +421,47 @@ export default function AssignmentEditor() {
             <div className="lyr-label-row">
               <label className="lyr-label">Assignment Title</label>
             </div>
+<<<<<<< logan/upload-assignment-info
+            <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100 space-y-4">
+              {uploadedFiles.length === 0 && !isUploading && (
+                <p className="text-gray-400 italic text-sm">No files uploaded yet.</p>
+              )}
+              {uploadedFiles.map((file, idx) => (
+                <div key={idx} className="flex items-center gap-3 text-gray-600">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5 shrink-0">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" />
+                    <path d="M14 2v6h6" />
+                  </svg>
+                  <span className="truncate text-sm">{file.name}</span>
+                  <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                </div>
+              ))}
+              {isUploading && (
+                <div className="flex items-center gap-3 text-gray-400 text-sm">
+                  <div className="w-4 h-4 border-2 border-gray-300 border-t-red-400 rounded-full animate-spin shrink-0" />
+                  Uploading...
+                </div>
+              )}
+              {uploadError && (
+                <p className="text-red-500 text-sm">{uploadError}</p>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <button
+                type="button"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4" />
+                {isUploading ? 'Uploading...' : 'Choose PDF'}
+              </button>
+=======
             <input type="text" className="lyr-input lyr-input-title" value={title}
               onChange={e => setTitle(e.target.value)} placeholder="Untitled Assignment" />
           </div>
@@ -353,6 +469,7 @@ export default function AssignmentEditor() {
           <div className="lyr-section">
             <div className="lyr-label-row">
               <label className="lyr-label">Description</label>
+>>>>>>> main
             </div>
             <textarea className="lyr-textarea" value={description}
               onChange={e => setDescription(e.target.value)}
@@ -379,6 +496,20 @@ export default function AssignmentEditor() {
               <div className="lyr-drop-sub">PDF, DOCX, PNG — up to 25MB each</div>
               <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileInput} />
             </div>
+<<<<<<< logan/upload-assignment-info
+            <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100 relative">
+              <textarea
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder="Please make 7 questions and 1 multiple choice based on the material"
+                className="w-full bg-transparent resize-none h-40 focus:outline-none text-gray-700 text-lg"
+              />
+              <button
+                onClick={handleGenerate}
+                className="mt-4 px-8 py-3 bg-gray-200 text-black border border-gray-300 rounded-full hover:bg-gray-300 transition-all flex items-center gap-2 font-medium"
+              >
+                {isGenerating ? 'Generating...' : 'Generate with AI'}
+=======
             {files.length > 0 && (
               <div className="lyr-files">
                 {files.map((file, idx) => (
@@ -411,10 +542,18 @@ export default function AssignmentEditor() {
                   <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
                 Edit
+>>>>>>> main
               </button>
             </div>
           </div>
 
+<<<<<<< logan/upload-assignment-info
+      <div className="fixed bottom-8 right-8">
+        <button className="flex items-center gap-2 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-lg hover:shadow-xl transition-all">
+          <div className="w-5 h-5 rounded-full border border-gray-400 flex items-center justify-center text-[10px]">★</div>
+          View Student View
+        </button>
+=======
           <div className="lyr-section">
             <div className="lyr-label-row">
               <label className="lyr-label">Special Request</label>
@@ -426,6 +565,7 @@ export default function AssignmentEditor() {
 
           <button className="lyr-create-btn">Create Assignment</button>
         </div>
+>>>>>>> main
       </div>
     </div>
   );
