@@ -23,6 +23,7 @@ function mapApiAssignmentToAssignment(row: {
   type?: string | null;
   max_points?: number;
   due_date?: string | null;
+  assignment_link?: string | null;
 }): Assignment {
   const typeStr = (row.type || 'homework').toLowerCase();
   const typeMap: Record<string, string> = {
@@ -43,7 +44,56 @@ function mapApiAssignmentToAssignment(row: {
     type: typeMap[typeStr] || typeStr,
     dueDate: due,
     content: row.description || undefined,
+    assignmentLink: row.assignment_link || undefined,
   };
+}
+
+function CopyLinkButton({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const fullUrl = `${window.location.origin}/assignment/${link}`;
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = fullUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={`ml-2 p-2 rounded-lg transition-colors shrink-0 ${
+        copied
+          ? 'text-green-500 bg-green-50'
+          : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+      }`}
+      title={copied ? 'Copied!' : `Copy assignment link`}
+    >
+      {copied ? (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 const App: React.FC = () => {
@@ -148,10 +198,13 @@ const App: React.FC = () => {
                         )}
                       </div>
                     </button>
+                    {a.assignmentLink && (
+                      <CopyLinkButton link={a.assignmentLink} />
+                    )}
                     <button
                       type="button"
                       onClick={() => handleDeleteAssignment(a.id)}
-                      className="ml-4 p-2 text-gray-300 hover:text-red-500 transition-colors shrink-0"
+                      className="ml-2 p-2 text-gray-300 hover:text-red-500 transition-colors shrink-0"
                       title="Delete assignment"
                     >
                       <Trash2 className="w-4 h-4" />

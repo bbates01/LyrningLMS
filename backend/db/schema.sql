@@ -61,7 +61,8 @@ CREATE TABLE assignments (
     description     TEXT,
     type            TEXT,
     max_points      REAL NOT NULL DEFAULT 100,
-    due_date        TEXT
+    due_date        TEXT,
+    assignment_link TEXT UNIQUE
 );
 
 -- Assignment PDF documents (stored in DB as BLOB)

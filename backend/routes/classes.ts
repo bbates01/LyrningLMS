@@ -1,6 +1,11 @@
 import express from 'express';
 import multer from 'multer';
+import crypto from 'crypto';
 import { query } from '../db/connection.js';
+
+function generateAssignmentLink(): string {
+  return crypto.randomBytes(8).toString('hex');
+}
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -109,7 +114,7 @@ router.get('/:classId/assignments', async (req, res) => {
   try {
     const { classId } = req.params;
     const result = await query(
-      `SELECT assignment_id, assignment_name, description, type, max_points, due_date
+      `SELECT assignment_id, assignment_name, description, type, max_points, due_date, assignment_link
        FROM assignments
        WHERE class_id = $1
        ORDER BY due_date ASC NULLS LAST`,
@@ -160,10 +165,12 @@ router.post('/:classId/assignments', async (req, res) => {
         .json({ success: false, error: 'You are not allowed to add assignments to this class' });
     }
 
+    const assignmentLink = generateAssignmentLink();
+
     const insertResult = await query(
-      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date`,
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link`,
       [
         classId,
         assignmentName,
@@ -171,6 +178,7 @@ router.post('/:classId/assignments', async (req, res) => {
         type ?? null,
         maxPoints ?? 100,
         dueDate ?? null,
+        assignmentLink,
       ]
     );
 
@@ -222,11 +230,12 @@ router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) 
         .json({ success: false, error: 'You are not allowed to add assignments to this class' });
     }
 
-    // Create the assignment row
+    const assignmentLink = generateAssignmentLink();
+
     const created = await query(
-      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date`,
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link`,
       [
         classId,
         assignmentName,
@@ -234,6 +243,7 @@ router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) 
         type ?? null,
         maxPointsNum == null || Number.isNaN(maxPointsNum) ? 100 : maxPointsNum,
         dueDate ?? null,
+        assignmentLink,
       ]
     );
 
@@ -242,17 +252,43 @@ router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) 
       return res.status(500).json({ success: false, error: 'Failed to create assignment' });
     }
 
-    // Store the PDF blob
     await query(
       `INSERT INTO assignment_documents (assignment_id, filename, mime_type, pdf_blob)
        VALUES ($1, $2, $3, $4)`,
       [assignment.assignment_id, req.file.originalname ?? null, req.file.mimetype, req.file.buffer]
     );
 
-    return res.status(201).json({ success: true, assignmentId: assignment.assignment_id });
+    return res.status(201).json({
+      success: true,
+      assignmentId: assignment.assignment_id,
+      assignmentLink: assignment.assignment_link,
+    });
   } catch (err) {
     console.error('Error uploading assignment PDF:', err);
     res.status(500).json({ success: false, error: 'Failed to upload assignment PDF' });
+  }
+});
+
+// GET /api/classes/assignments/link/:link — look up an assignment by its shareable link token
+router.get('/assignments/link/:link', async (req, res) => {
+  try {
+    const { link } = req.params;
+    const result = await query(
+      `SELECT a.assignment_id, a.class_id, a.assignment_name, a.description, a.type,
+              a.max_points, a.due_date, a.assignment_link,
+              c.class_name
+       FROM assignments a
+       JOIN classes c ON c.class_id = a.class_id
+       WHERE a.assignment_link = $1`,
+      [link]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Assignment not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching assignment by link:', err);
+    res.status(500).json({ error: 'Failed to fetch assignment' });
   }
 });
 

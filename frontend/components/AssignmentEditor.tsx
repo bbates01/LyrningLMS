@@ -1,79 +1,6 @@
 import React, { useState, useRef } from 'react';
-
-<<<<<<< logan/upload-assignment-info
-import React, { useRef, useState } from 'react';
-import { Pencil, Plus, Upload, CheckCircle2 } from './Icons';
-import { generateAssignment } from '../services/geminiService';
 import { uploadAssignmentPdf } from '../services/api';
 
-interface Props {
-  classId: number;
-  teacherId: number;
-}
-
-interface UploadedFile {
-  name: string;
-  assignmentId: number;
-}
-
-const AssignmentEditor: React.FC<Props> = ({ classId, teacherId }) => {
-  const [title, setTitle] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [result, setResult] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleGenerate = async () => {
-    setIsGenerating(true);
-    const fileNames = uploadedFiles.map((f) => f.name);
-    const generated = await generateAssignment(title || 'Algebra Basics', fileNames);
-    setResult(generated);
-    setIsGenerating(false);
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Reset input so the same file can be re-selected if needed
-    e.target.value = '';
-
-    if (!title.trim()) {
-      setUploadError('Please enter an assignment title before uploading a file.');
-      return;
-    }
-
-    setUploadError('');
-    setIsUploading(true);
-
-    const res = await uploadAssignmentPdf(classId, teacherId, file, title.trim());
-
-    setIsUploading(false);
-
-    if (!res.success || res.assignmentId == null) {
-      setUploadError(res.error || 'Upload failed. Please try again.');
-      return;
-    }
-
-    setUploadedFiles((prev) => [...prev, { name: file.name, assignmentId: res.assignmentId! }]);
-  };
-
-  return (
-    <div className="space-y-12">
-      <div className="flex items-center gap-2 border-b-2 border-gray-900 pb-2 max-w-md">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="ADD ASSIGNMENT TITLE"
-          className="text-2xl font-bold bg-transparent focus:outline-none flex-1 placeholder:text-gray-300"
-        />
-        <Pencil className="w-6 h-6 text-gray-500" />
-      </div>
-=======
 const BRAND = '#D96B6B';
 const BRAND_LIGHT = '#F2DADA';
 const BG = '#FFFFFF';
@@ -83,15 +10,19 @@ const TEXT = '#1C2128';
 const MUTED = '#8A8FA8';
 const BORDER = '#E8E8EC';
 
-export default function AssignmentEditor() {
+interface Props {
+  classId: number;
+  teacherId: number;
+}
+
+export default function AssignmentEditor({ classId, teacherId }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [specialRequest, setSpecialRequest] = useState('');
-  const [files, setFiles] = useState([
-    { name: 'classMaterial03-05-26.pdf', size: '2.4 MB' },
-    { name: 'examplePracticeProblems03-05-26.pdf', size: '1.1 MB' },
-  ]);
+  const [files, setFiles] = useState<{ name: string; size: string }[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [showAIConfig, setShowAIConfig] = useState(false);
   const [aiConfig, setAiConfig] = useState({
     model: 'gemini-pro',
@@ -100,9 +31,9 @@ export default function AssignmentEditor() {
     includeMultipleChoice: true,
     difficulty: 'medium',
   });
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const dropped = Array.from(e.dataTransfer.files).map(f => ({
@@ -112,15 +43,30 @@ export default function AssignmentEditor() {
     setFiles(prev => [...prev, ...dropped]);
   };
 
-  const handleFileInput = (e) => {
-    const selected = Array.from(e.target.files).map(f => ({
-      name: f.name,
-      size: (f.size / 1024 / 1024).toFixed(1) + ' MB',
-    }));
-    setFiles(prev => [...prev, ...selected]);
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const selected = Array.from(e.target.files);
+
+    for (const file of selected) {
+      if (file.type === 'application/pdf' && title.trim()) {
+        setIsUploading(true);
+        setUploadError('');
+        const res = await uploadAssignmentPdf(classId, teacherId, file, title.trim());
+        setIsUploading(false);
+        if (!res.success) {
+          setUploadError(res.error || 'Upload failed.');
+          continue;
+        }
+      }
+      setFiles(prev => [...prev, {
+        name: file.name,
+        size: (file.size / 1024 / 1024).toFixed(1) + ' MB',
+      }]);
+    }
+    e.target.value = '';
   };
 
-  const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
+  const removeFile = (idx: number) => setFiles(prev => prev.filter((_, i) => i !== idx));
 
   return (
     <div style={{
@@ -131,9 +77,7 @@ export default function AssignmentEditor() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
->>>>>>> main
 
-        /* ── Top nav bar ── */
         .lyr-nav {
           height: 56px;
           background: ${CARD};
@@ -151,22 +95,13 @@ export default function AssignmentEditor() {
         }
         .lyr-nav-spacer { flex: 1; }
 
-        /* ── Main single-col layout ── */
         .lyr-main {
           max-width: 860px;
           margin: 0 auto;
           padding: 40px 48px 80px;
         }
 
-        /* ── Content area ── */
-        .lyr-content {
-          width: 100%;
-        }
-
-        .lyr-page-title {
-          font-size: 26px; font-weight: 700; color: ${TEXT};
-          letter-spacing: -0.5px; margin-bottom: 36px;
-        }
+        .lyr-content { width: 100%; }
 
         .lyr-section { margin-bottom: 32px; }
 
@@ -191,13 +126,10 @@ export default function AssignmentEditor() {
           border-color: ${BRAND};
           box-shadow: 0 0 0 3px ${BRAND_LIGHT};
         }
-        .lyr-input-title {
-          font-size: 20px; font-weight: 600;
-        }
+        .lyr-input-title { font-size: 20px; font-weight: 600; }
         .lyr-textarea { min-height: 120px; line-height: 1.65; }
         .lyr-textarea-sm { min-height: 90px; }
 
-        /* Drop zone */
         .lyr-drop {
           background: ${INPUT_BG};
           border: 2px dashed #DDDFE8;
@@ -220,7 +152,6 @@ export default function AssignmentEditor() {
         .lyr-drop-main span { color: ${BRAND}; text-decoration: underline; }
         .lyr-drop-sub { font-size: 12px; color: ${MUTED}; }
 
-        /* File list */
         .lyr-files { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
         .lyr-file {
           display: flex; align-items: center; gap: 10px;
@@ -243,7 +174,7 @@ export default function AssignmentEditor() {
         }
         .lyr-file-rm:hover { color: ${BRAND}; background: ${BRAND_LIGHT}; }
 
-        /* AI edit button */
+        .lyr-ai-btn {
           display: flex; align-items: center; gap: 5px;
           background: ${INPUT_BG}; border: none; border-radius: 8px;
           padding: 6px 11px;
@@ -254,7 +185,6 @@ export default function AssignmentEditor() {
         }
         .lyr-ai-btn:hover { color: ${TEXT}; background: #E4E5EA; }
 
-        /* Create button */
         .lyr-create-btn {
           background: ${BRAND}; color: white;
           border: none; border-radius: 12px; padding: 14px 32px;
@@ -269,7 +199,6 @@ export default function AssignmentEditor() {
         }
         .lyr-create-btn:active { transform: none; }
 
-        /* ── Modal ── */
         .lyr-overlay {
           position: fixed; inset: 0;
           background: rgba(0,0,0,0.22);
@@ -344,9 +273,10 @@ export default function AssignmentEditor() {
           box-shadow: 0 4px 12px rgba(217,107,107,0.28);
         }
         .lyr-modal-save:hover { background: #C85F5F; }
+
+        .lyr-error { color: #D96B6B; font-size: 13px; margin-top: 8px; }
       `}</style>
 
-      {/* Modal */}
       {showAIConfig && (
         <div className="lyr-overlay" onClick={() => setShowAIConfig(false)}>
           <div className="lyr-modal" onClick={e => e.stopPropagation()}>
@@ -408,60 +338,17 @@ export default function AssignmentEditor() {
         </div>
       )}
 
-      {/* Nav */}
       <nav className="lyr-nav">
         <span className="lyr-nav-name">New Assignment</span>
         <div className="lyr-nav-spacer" />
       </nav>
 
-      {/* Single-col body */}
       <div className="lyr-main">
         <div className="lyr-content">
           <div className="lyr-section">
             <div className="lyr-label-row">
               <label className="lyr-label">Assignment Title</label>
             </div>
-<<<<<<< logan/upload-assignment-info
-            <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100 space-y-4">
-              {uploadedFiles.length === 0 && !isUploading && (
-                <p className="text-gray-400 italic text-sm">No files uploaded yet.</p>
-              )}
-              {uploadedFiles.map((file, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-gray-600">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5 shrink-0">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" />
-                    <path d="M14 2v6h6" />
-                  </svg>
-                  <span className="truncate text-sm">{file.name}</span>
-                  <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                </div>
-              ))}
-              {isUploading && (
-                <div className="flex items-center gap-3 text-gray-400 text-sm">
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-red-400 rounded-full animate-spin shrink-0" />
-                  Uploading...
-                </div>
-              )}
-              {uploadError && (
-                <p className="text-red-500 text-sm">{uploadError}</p>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <button
-                type="button"
-                disabled={isUploading}
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
-              >
-                <Upload className="w-4 h-4" />
-                {isUploading ? 'Uploading...' : 'Choose PDF'}
-              </button>
-=======
             <input type="text" className="lyr-input lyr-input-title" value={title}
               onChange={e => setTitle(e.target.value)} placeholder="Untitled Assignment" />
           </div>
@@ -469,7 +356,6 @@ export default function AssignmentEditor() {
           <div className="lyr-section">
             <div className="lyr-label-row">
               <label className="lyr-label">Description</label>
->>>>>>> main
             </div>
             <textarea className="lyr-textarea" value={description}
               onChange={e => setDescription(e.target.value)}
@@ -484,7 +370,7 @@ export default function AssignmentEditor() {
               onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current.click()}>
+              onClick={() => fileInputRef.current?.click()}>
               <div className="lyr-upload-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BRAND} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -496,20 +382,12 @@ export default function AssignmentEditor() {
               <div className="lyr-drop-sub">PDF, DOCX, PNG — up to 25MB each</div>
               <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileInput} />
             </div>
-<<<<<<< logan/upload-assignment-info
-            <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100 relative">
-              <textarea
-                value={instructions}
-                onChange={(e) => setInstructions(e.target.value)}
-                placeholder="Please make 7 questions and 1 multiple choice based on the material"
-                className="w-full bg-transparent resize-none h-40 focus:outline-none text-gray-700 text-lg"
-              />
-              <button
-                onClick={handleGenerate}
-                className="mt-4 px-8 py-3 bg-gray-200 text-black border border-gray-300 rounded-full hover:bg-gray-300 transition-all flex items-center gap-2 font-medium"
-              >
-                {isGenerating ? 'Generating...' : 'Generate with AI'}
-=======
+            {isUploading && (
+              <p style={{ color: MUTED, fontSize: 13, marginTop: 8 }}>Uploading...</p>
+            )}
+            {uploadError && (
+              <p className="lyr-error">{uploadError}</p>
+            )}
             {files.length > 0 && (
               <div className="lyr-files">
                 {files.map((file, idx) => (
@@ -542,18 +420,10 @@ export default function AssignmentEditor() {
                   <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
                 Edit
->>>>>>> main
               </button>
             </div>
           </div>
 
-<<<<<<< logan/upload-assignment-info
-      <div className="fixed bottom-8 right-8">
-        <button className="flex items-center gap-2 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-lg hover:shadow-xl transition-all">
-          <div className="w-5 h-5 rounded-full border border-gray-400 flex items-center justify-center text-[10px]">★</div>
-          View Student View
-        </button>
-=======
           <div className="lyr-section">
             <div className="lyr-label-row">
               <label className="lyr-label">Special Request</label>
@@ -565,7 +435,6 @@ export default function AssignmentEditor() {
 
           <button className="lyr-create-btn">Create Assignment</button>
         </div>
->>>>>>> main
       </div>
     </div>
   );

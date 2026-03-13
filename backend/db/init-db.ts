@@ -20,6 +20,7 @@ db.pragma('foreign_keys = ON');
 const tables = [
   'student_metrics',
   'student_grades',
+  'assignment_documents',
   'student_classes',
   'assignments',
   'classes',
