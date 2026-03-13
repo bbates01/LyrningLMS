@@ -76,8 +76,9 @@ The database uses a **`class_code`** (e.g. `R7T4W9YZ`) on each class in addition
 
 ## Prerequisites
 
-- **Node.js** (v18+) — [nodejs.org](https://nodejs.org)  
-  `node --version`
+- **Node.js 20.x (LTS)** — [nodejs.org](https://nodejs.org)  
+  - This project includes an `.nvmrc` file. If you use `nvm`, run `nvm use` in the project root to automatically switch to Node 20.  
+  - Verify with: `node --version` (should show something like `v20.x.x`).
 - **npm** (included with Node)  
   `npm --version`
 - **Google Gemini API key** (optional; **not required** for testing the vertical slice) — [ai.google.dev](https://ai.google.dev)
@@ -95,6 +96,7 @@ Do these in order.
 ```bash
 git clone [URL]
 cd LyrningLMS
+nvm use   # if you have nvm installed; otherwise make sure you're on Node 20.x
 npm install
 ```
 
