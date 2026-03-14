@@ -18,6 +18,9 @@ const db = new Database(dbPath);
 db.pragma('foreign_keys = ON');
 
 const tables = [
+  'assignment_question_options',
+  'assignment_questions',
+  'assignment_documents',
   'student_metrics',
   'student_grades',
   'student_classes',

@@ -35,19 +35,10 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
       {/* Sticky Header & Navigation Wrapper */}
       <div className="sticky top-0 z-50 bg-white shadow-sm">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center cursor-pointer"
-              style={{ backgroundColor: COLORS.primary }}
-              onClick={() => { if (selectedClass) onBackToClasses(); }}
-            >
-              <svg viewBox="0 0 24 24" fill="black" className="w-6 h-6">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold" style={{ color: '#333' }}>Lyrning</h1>
-            <div className="h-8 w-[1px] bg-gray-300 mx-2"></div>
+        <header className="bg-white border-b border-gray-200 px-8 py-1.2 flex items-center justify-between min-h-0">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            <img src="/img/long-logo.png" alt="Lyrning" className="h-20 w-auto object-contain object-left flex-shrink-0" />
+            <div className="h-6 w-[1px] bg-gray-300 mx-1 flex-shrink-0"></div>
             <span className="text-gray-600 font-medium">
               {isClassSelect
                 ? 'My Classes'
@@ -61,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
             <button
               type="button"
               onClick={() => setProfileOpen((o) => !o)}
-              className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-red-200 focus:ring-offset-2"
+              className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ba3638]"
               aria-expanded={profileOpen}
               aria-haspopup="true"
             >
@@ -78,7 +69,8 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
                   <button
                     type="button"
                     onClick={() => { setProfileOpen(false); onLogout(); }}
-                    className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors rounded-lg mx-1"
+                    className="w-full text-left px-4 py-3 text-sm font-medium transition-colors rounded-lg mx-1 hover:opacity-90"
+                    style={{ color: COLORS.primary }}
                   >
                     Logout
                   </button>
@@ -95,7 +87,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
               type="button"
               onClick={() => onViewChange('ASSIGNMENT_LIST')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                currentView === 'ASSIGNMENT_LIST' || currentView === 'ASSIGNMENT_EDIT' || currentView === 'ASSIGNMENT_VIEW'
+                currentView === 'ASSIGNMENT_LIST' || currentView === 'ASSIGNMENT_EDIT' || currentView === 'ASSIGNMENT_VIEW' || currentView === 'ASSIGNMENT_CREATE_SUCCESS'
                   ? 'bg-white text-black shadow-sm border border-gray-200'
                   : 'text-gray-600 hover:text-black hover:bg-white/70'
               }`}

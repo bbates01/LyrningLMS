@@ -2,8 +2,10 @@
 import React from 'react';
 import { Student, Assignment, StudentStats } from './types';
 
+export const lyrningRed = '#ba3638';
+
 export const COLORS = {
-  primary: '#e16b6b',
+  primary: lyrningRed,
   secondary: '#f3f4f6',
   accent: '#4ade80', // Green for charts
   text: '#1f2937',

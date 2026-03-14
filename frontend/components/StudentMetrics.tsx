@@ -74,7 +74,7 @@ const StudentMetrics: React.FC<StudentMetricsProps> = ({ student }) => {
               className={`space-y-4 cursor-pointer transition-all ${activeMetric === 'dependency' ? 'scale-105' : 'opacity-70'}`}
               onClick={() => setActiveMetric('dependency')}
             >
-              <div className="text-6xl font-bold text-red-400">{stats.dependency}%</div>
+              <div className="text-6xl font-bold" style={{ color: COLORS.primary }}>{stats.dependency}%</div>
               <div className="text-lg text-gray-700">AI Dependency</div>
             </div>
 

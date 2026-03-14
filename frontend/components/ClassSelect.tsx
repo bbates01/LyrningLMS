@@ -42,8 +42,8 @@ const ClassSelect: React.FC<ClassSelectProps> = ({ userId, onSelectClass }) => {
 
   if (error) {
     return (
-      <div className="rounded-2xl bg-red-50 border border-red-100 p-6 text-center">
-        <p className="text-red-700 font-medium">{error}</p>
+      <div className="rounded-2xl bg-[#ba3638]/10 border border-[#ba3638]/20 p-6 text-center">
+        <p className="font-medium" style={{ color: '#ba3638' }}>{error}</p>
       </div>
     );
   }
@@ -68,10 +68,10 @@ const ClassSelect: React.FC<ClassSelectProps> = ({ userId, onSelectClass }) => {
               onClick={() => onSelectClass(cls)}
               className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all text-left group flex flex-col h-full"
             >
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-red-400 group-hover:bg-red-50 transition-all mb-4" style={{ backgroundColor: COLORS.secondary }}>
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center transition-all mb-4 group-hover:bg-[#ba3638]/10" style={{ backgroundColor: COLORS.secondary, color: COLORS.primary }}>
                 <BookOpen className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-black group-hover:text-red-500 transition-colors mb-1">
+              <h3 className="text-xl font-bold text-black transition-colors mb-1 group-hover:text-[#ba3638]">
                 {cls.class_name}
               </h3>
               <p className="text-gray-600 text-sm font-medium">{cls.subject_code}</p>

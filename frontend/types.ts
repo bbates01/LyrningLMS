@@ -9,7 +9,8 @@ export type ViewState =
   | 'CLASS_INFO'
   | 'ASSIGNMENT_LIST'
   | 'ASSIGNMENT_EDIT'
-  | 'ASSIGNMENT_VIEW';
+  | 'ASSIGNMENT_VIEW'
+  | 'ASSIGNMENT_CREATE_SUCCESS';
 
 /** Class/course from API (teacher's taught classes) */
 export interface ClassSummary {

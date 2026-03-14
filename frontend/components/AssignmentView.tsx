@@ -10,15 +10,16 @@ import {
   HelpCircle
 } from './Icons';
 import { Assignment } from '../types';
-import { chatWithTutor } from '../services/geminiService';
-import { COLORS } from '../constants';
+import { chatWithTutor } from '../services/aiService';
+import { type AssignmentQuestionPreview } from '../services/api';
 
 interface AssignmentViewProps {
   assignment: Assignment;
   onViewTeacherMode: () => void;
+  questionsPreview?: AssignmentQuestionPreview[];
 }
 
-const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeacherMode }) => {
+const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeacherMode, questionsPreview = [] }) => {
   const [messages, setMessages] = useState<{role: 'user' | 'tutor', content: string}[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -55,16 +56,41 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
         <h2 className="text-3xl font-bold text-black">{assignment.title}</h2>
         
         <div className="bg-white border border-gray-200 rounded-3xl p-10 shadow-sm relative">
-          <div className="prose max-w-none text-black leading-relaxed whitespace-pre-wrap font-medium">
-            {assignment.content}
-          </div>
+          {questionsPreview.length > 0 ? (
+            <div className="space-y-8">
+              {questionsPreview.map((q, idx) => (
+                <div key={q.questionId || idx} className="space-y-3">
+                  <p className="font-semibold text-black">
+                    {q.sortOrder}. {q.questionText}
+                    {q.questionType === 'select_all_that_apply' && (
+                      <span className="ml-2 text-sm font-normal text-gray-500 italic">(Select all that apply)</span>
+                    )}
+                  </p>
+                  <ul className="list-none space-y-2 pl-0">
+                    {q.options.map((opt, oidx) => (
+                      <li key={oidx} className="text-gray-700">
+                        <span className={opt.isCorrect ? 'font-medium text-green-700' : ''}>
+                          {String.fromCharCode(65 + oidx)}. {opt.optionText}
+                          {opt.isCorrect ? ' (Correct)' : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="prose max-w-none text-black leading-relaxed whitespace-pre-wrap font-medium">
+              {assignment.content || 'No questions for this assignment yet.'}
+            </div>
+          )}
 
           <div className="mt-12 flex items-center gap-4">
             <div className="flex-1 relative">
               <input 
                 type="text" 
                 placeholder="Submit Answers Here" 
-                className="w-full bg-gray-50 border border-gray-300 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-red-200 transition-all text-black font-semibold"
+                className="w-full bg-gray-50 border border-gray-300 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-[#ba3638]/30 transition-all text-black font-semibold"
               />
               <button className="absolute right-3 top-1/2 -translate-y-1/2 bg-gray-200 p-2 rounded-full hover:bg-gray-300 transition-colors">
                 <ArrowRight className="w-5 h-5 text-black" />
@@ -81,8 +107,8 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
           <div className="flex-1 p-6 overflow-y-auto space-y-4" ref={scrollRef}>
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 px-6">
-                <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center">
-                  <HelpCircle className="w-8 h-8 text-red-400" />
+                <div className="w-16 h-16 bg-[#ba3638]/10 rounded-2xl flex items-center justify-center">
+                  <HelpCircle className="w-8 h-8 text-[#ba3638]" />
                 </div>
                 <div>
                   <h4 className="font-bold text-lg text-black">AI Tutor Assistant</h4>
@@ -105,7 +131,7 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
                 <div 
                   className={`max-w-[85%] rounded-2xl p-4 text-sm font-medium ${
                     m.role === 'user' 
-                      ? 'bg-red-50 text-black rounded-tr-none border border-red-100' 
+                      ? 'bg-[#ba3638]/10 text-black rounded-tr-none border border-[#ba3638]/20' 
                       : 'bg-gray-100 text-black rounded-tl-none border border-gray-200'
                   }`}
                 >
@@ -135,9 +161,9 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
                 />
                 <div className="flex items-center justify-between mt-2">
                   <div className="flex gap-4 text-gray-500">
-                    <button className="hover:text-red-500"><ImageIcon className="w-5 h-5" /></button>
-                    <button className="hover:text-red-500"><Code className="w-5 h-5" /></button>
-                    <button className="hover:text-red-500"><Mic className="w-5 h-5" /></button>
+                    <button className="hover:text-[#ba3638]"><ImageIcon className="w-5 h-5" /></button>
+                    <button className="hover:text-[#ba3638]"><Code className="w-5 h-5" /></button>
+                    <button className="hover:text-[#ba3638]"><Mic className="w-5 h-5" /></button>
                   </div>
                   <button 
                     onClick={handleSend}

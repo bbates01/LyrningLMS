@@ -10,7 +10,7 @@ A learning management system that integrates AI as a guided learning tool while 
 
 **Problem:** Teenagers increasingly rely on AI to complete work without learning. Educators need a way to use AI in the classroom that supports understanding instead of shortcuts.
 
-**Product value:** LyrningLMS gives teachers a single place to create assignments, quizzes, labs, and projects and to embed Google’s Gemini API with configurable guardrails. Students get AI help that stays within teacher-set restrictions, while teachers see metrics on understanding, engagement, and AI dependency. That lets educators spot over-reliance early and adjust support. The result: students build independent problem-solving skills while using AI as a learning aid, not a crutch.
+**Product value:** LyrningLMS gives teachers a single place to create assignments, quizzes, labs, and projects and to embed the Groq API with configurable guardrails. Students get AI help that stays within teacher-set restrictions, while teachers see metrics on understanding, engagement, and AI dependency. That lets educators spot over-reliance early and adjust support. The result: students build independent problem-solving skills while using AI as a learning aid, not a crutch.
 
 ---
 
@@ -23,12 +23,12 @@ Organized by layer:
 | **Frontend** | React, TypeScript, Vite (build and dev server), component-based UI |
 | **Backend** | Node.js, Express.js (REST API) |
 | **Data** | SQLite (relational database, single file) |
-| **External** | Google Gemini API (AI learning assistance) |
+| **External** | Groq API (AI learning assistance) |
 
 - **Frontend:** React with TypeScript; Vite for fast builds and HMR.
 - **Backend:** Node.js and Express for auth, classes, assignments, and enrollment.
 - **Database:** SQLite with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
-- **APIs:** REST for the app; Gemini for in-assignment AI tutoring.
+- **APIs:** REST for the app; Groq for in-assignment AI tutoring.
 
 ---
 
@@ -54,14 +54,14 @@ Organized by layer:
      │ SQL                                                    │ HTTPS
      ▼                                                        ▼
 ┌──────────────────┐                          ┌──────────────────────┐
-│   SQLite         │                          │  Google Gemini API   │
+│   SQLite         │                          │  Groq API            │
 │   (lyrning.sqlite) │                         │  (AI tutor)          │
 └──────────────────┘                          └──────────────────────┘
 ```
 
 - **Browser:** Teachers and students use the same app; role is determined at login.
 - **Frontend:** SPA that calls the backend for auth, class list, enrollment, and assignments.
-- **Backend:** Serves REST endpoints; talks to SQLite and (for AI) to Gemini.
+- **Backend:** Serves REST endpoints; talks to SQLite and (for AI) to Groq.
 - **Database:** Holds users, classes, enrollments, assignments, and grades. **Class codes** (see below) allow students to join classes without exposing primary keys.
 
 ---
@@ -81,7 +81,7 @@ The database uses a **`class_code`** (e.g. `R7T4W9YZ`) on each class in addition
   - Verify with: `node --version` (should show something like `v20.x.x`).
 - **npm** (included with Node)  
   `npm --version`
-- **Google Gemini API key** (optional; **not required** for testing the vertical slice) — [ai.google.dev](https://ai.google.dev)
+- **Groq API key** (optional; **not required** for testing the vertical slice) — [console.groq.com](https://console.groq.com)
 
 No separate database server is required; the app uses **SQLite** (single file).
 
@@ -109,12 +109,12 @@ SQLITE_DB_PATH=./backend/db/lyrning.sqlite
 PORT=3001
 VITE_API_URL=http://localhost:3001
 NODE_ENV=development
-GEMINI_API_KEY=your_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
 - `SQLITE_DB_PATH` is the path to the SQLite database file (default: `./backend/db/lyrning.sqlite`).
 - `PORT` is the backend port. Set `VITE_API_URL` to the same base URL (e.g. `http://localhost:3001`) so the frontend can reach the API.
-- `GEMINI_API_KEY` is not required for testing the vertical slice (add a student to a class by class code).
+- `GROQ_API_KEY` is used by the backend for the AI tutor and assignment question generation. Get a key at [console.groq.com](https://console.groq.com). Not required for testing the vertical slice (e.g. add a student to a class by class code).
 
 ### 3. Database
 

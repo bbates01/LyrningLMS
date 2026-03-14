@@ -35,16 +35,19 @@ export async function enrollStudentByClassCode(studentId: number, classCode: str
   return { success: true };
 }
 
+/** Upload a PDF. If assignmentId is provided, attach to that assignment; otherwise backend creates a new assignment (legacy). */
 export async function uploadAssignmentPdf(
   classId: number,
   teacherId: number,
   file: File,
   assignmentName: string,
+  assignmentId?: number
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
   const formData = new FormData();
   formData.append('pdf', file);
   formData.append('teacherId', String(teacherId));
   formData.append('assignmentName', assignmentName);
+  if (assignmentId != null) formData.append('assignmentId', String(assignmentId));
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments/pdf`, {
     method: 'POST',
     body: formData,
@@ -52,4 +55,79 @@ export async function uploadAssignmentPdf(
   const data = await res.json();
   if (!res.ok) return { success: false, error: data.error || 'Upload failed' };
   return { success: true, assignmentId: data.assignmentId };
+}
+
+export async function createAssignment(
+  classId: number,
+  teacherId: number,
+  assignmentName: string,
+  description?: string
+): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teacherId, assignmentName, description: description || '' }),
+  });
+  const data = await res.json();
+  if (!res.ok) return { success: false, error: data.error || 'Failed to create assignment' };
+  return { success: true, assignmentId: data.assignment?.assignment_id };
+}
+
+export type SavedQuestionPayload = {
+  questionText: string;
+  questionType?: 'multiple_choice' | 'select_all_that_apply';
+  correctAnswer?: string;
+  correctAnswers?: string[];
+  falseAnswers: string[];
+};
+
+export async function saveAssignmentQuestions(
+  classId: number,
+  assignmentId: number,
+  questions: SavedQuestionPayload[]
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(
+    `${API_BASE}/api/classes/${classId}/assignments/${assignmentId}/questions`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questions }),
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) return { success: false, error: data.error || 'Failed to save questions' };
+  return { success: true };
+}
+
+export interface AssignmentQuestionPreview {
+  questionId: number;
+  sortOrder: number;
+  questionText: string;
+  questionType?: string;
+  options: { optionText: string; isCorrect: number }[];
+}
+
+export async function fetchAssignmentQuestions(
+  classId: number,
+  assignmentId: number
+): Promise<AssignmentQuestionPreview[]> {
+  const res = await fetch(
+    `${API_BASE}/api/classes/${classId}/assignments/${assignmentId}/questions`
+  );
+  if (!res.ok) throw new Error('Failed to fetch questions');
+  const data = await res.json();
+  return data.questions ?? [];
+}
+
+export async function deleteAssignment(
+  classId: number,
+  assignmentId: number
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(
+    `${API_BASE}/api/classes/${classId}/assignments/${assignmentId}`,
+    { method: 'DELETE' }
+  );
+  const data = await res.json();
+  if (!res.ok) return { success: false, error: data.error || 'Failed to delete' };
+  return { success: true };
 }
