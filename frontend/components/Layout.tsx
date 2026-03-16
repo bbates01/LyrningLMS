@@ -31,15 +31,15 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
   const isClassSelect = currentView === 'CLASS_SELECT';
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Sticky Header & Navigation Wrapper */}
       <div className="sticky top-0 z-50 bg-white shadow-sm">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-8 py-1.2 flex items-center justify-between min-h-0">
-          <div className="flex items-center gap-4 flex-1 min-w-0">
-            <img src="/img/long-logo.png" alt="Lyrning" className="h-20 w-auto object-contain object-left flex-shrink-0" />
+        <header className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between min-h-0">
+          <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+            <img src="/img/long-logo.png" alt="Lyrning" className="h-12 sm:h-16 md:h-20 w-auto object-contain object-left flex-shrink-0" />
             <div className="h-6 w-[1px] bg-gray-300 mx-1 flex-shrink-0"></div>
-            <span className="text-gray-600 font-medium">
+            <span className="text-gray-600 font-medium truncate">
               {isClassSelect
                 ? 'My Classes'
                 : selectedClass
@@ -82,7 +82,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
 
         {/* Class-level tab nav — only shown when a class is selected */}
         {!isClassSelect && selectedClass && (
-          <nav className="bg-gray-50 border-b border-gray-100 flex justify-start px-8 py-2 gap-1">
+          <nav className="bg-gray-50 border-b border-gray-100 flex justify-start px-4 sm:px-6 lg:px-8 py-2 gap-1 overflow-x-auto">
             <button
               type="button"
               onClick={() => onViewChange('ASSIGNMENT_LIST')}
@@ -110,7 +110,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
         {children}
       </main>
     </div>

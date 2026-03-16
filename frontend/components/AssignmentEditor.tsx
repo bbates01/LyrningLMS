@@ -196,7 +196,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
   };
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 pb-6">
       <div className="flex items-center gap-2 border-b-2 border-gray-900 pb-2 max-w-md">
         <input
           type="text"
@@ -384,15 +384,6 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
           </div>
         </div>
       )}
-
-      <div className="fixed bottom-8 right-8">
-        <button className="flex items-center gap-2 bg-white px-6 py-3 rounded-full border border-gray-200 shadow-lg hover:shadow-xl transition-all">
-          <div className="w-5 h-5 rounded-full border border-gray-400 flex items-center justify-center text-[10px]">
-            ★
-          </div>
-          <span className="text-sm font-medium text-gray-700">View Student View</span>
-        </button>
-      </div>
     </div>
   );
 };

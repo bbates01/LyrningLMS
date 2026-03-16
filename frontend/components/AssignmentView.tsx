@@ -50,12 +50,12 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8 h-[calc(100vh-250px)]">
+    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 min-h-[calc(100vh-220px)]">
       {/* Assignment Content */}
-      <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-4">
-        <h2 className="text-3xl font-bold text-black">{assignment.title}</h2>
+      <div className="flex-1 flex flex-col gap-4 lg:gap-6 overflow-y-auto pr-0 lg:pr-4">
+        <h2 className="text-2xl sm:text-3xl font-bold text-black break-words">{assignment.title}</h2>
         
-        <div className="bg-white border border-gray-200 rounded-3xl p-10 shadow-sm relative">
+        <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-8 lg:p-10 shadow-sm relative">
           {questionsPreview.length > 0 ? (
             <div className="space-y-8">
               {questionsPreview.map((q, idx) => (
@@ -85,7 +85,7 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
             </div>
           )}
 
-          <div className="mt-12 flex items-center gap-4">
+          <div className="mt-8 sm:mt-10 lg:mt-12 flex items-center gap-4">
             <div className="flex-1 relative">
               <input 
                 type="text" 
@@ -181,7 +181,7 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
           onClick={onViewTeacherMode}
           className="w-full py-3 bg-gray-100 text-black border border-gray-200 rounded-2xl hover:bg-gray-200 transition-colors font-bold text-sm"
         >
-          View as Teacher
+          View as Student
         </button>
       </div>
     </div>
