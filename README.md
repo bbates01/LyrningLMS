@@ -189,3 +189,57 @@ Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (
 - **`backend/db/`** — `schema.sql`, `seed.sql`, optional migration scripts.
 
 A new teammate can run the project by: installing Node, copying `.env`, running `npm run db:init`, and running `npm run dev`, then following the verification steps above.
+
+# EARS Requirements
+
+## Complete
+
+1. When a teacher uploads course material (PDF), the system shall store the material for assignment generation.
+
+2. When course material is uploaded, the system shall generate assignment questions using AI.
+
+3. When AI generates assignment questions, the system shall allow teachers to edit the questions before confirming them.
+
+4. When a teacher confirms generated questions, the system shall store the questions and answers in the database.
+
+5. When a teacher logs into the system, the system shall allow navigation to the assignment creation page.
+
+6. The system shall allow teachers to upload assignment materials (e.g., class PDFs).
+
+7. The system shall support AI parameter configuration using a default parameter file.
+
+8. When an assignment is created, the system shall store AI parameters associated with that assignment in the database.
+
+---
+
+## Not Complete
+
+1. When an assignment is created, the system shall generate a shareable assignment link for teachers.
+
+2. When a teacher requests an assignment link, the system shall allow the teacher to copy the link to share with students.
+
+3. When a student opens an assignment link, the system shall allow the student to access the assignment page.
+
+4. When a user attempts to log in, the system shall restrict the teacher login page to teacher credentials only.
+
+5. When a student attempts to access assignments, the system shall provide a student-specific access page through assignment links.
+
+6. The system documentation shall include an updated ERD reflecting AI assignment parameters and related schema changes.
+
+7. All developers shall clone the GitHub repository and configure their environment according to the README instructions.
+
+8. When a student accesses an assignment, the system shall provide an assessment page interface for completing the assignment.
+
+9. When a student opens an assignment completion page, the system shall synchronize assignment questions and answers from the database.
+
+10. When a student logs in, the system shall authenticate the student credentials before allowing access to the assignment completion page.
+
+11. When a student completes an assignment, the system shall synchronize the completed assignment data with the teacher’s system.
+
+12. When a student completes an assignment, the system shall generate performance metrics based on the student’s responses.
+
+13. When a student submits an assignment, the system shall assign a default grade based on the accuracy of the student’s answers.
+
+14. When a student interacts with the assignment system, the system shall provide an AI chat interface for assistance.
+
+15. When generating assignments, the system shall combine the default AI parameters and the custom teacher instructions defined in the assignment configuration.
