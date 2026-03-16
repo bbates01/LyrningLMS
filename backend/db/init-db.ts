@@ -16,7 +16,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-<<<<<<< HEAD
 async function tableExists(table: string): Promise<boolean> {
   const res = await pool.query(
     `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1 LIMIT 1`,
@@ -24,29 +23,6 @@ async function tableExists(table: string): Promise<boolean> {
   );
   return res.rowCount > 0;
 }
-=======
-const tables = [
-  'student_metrics',
-  'student_grades',
-  'assignment_documents',
-  'student_classes',
-  'assignments',
-  'classes',
-  'subjects',
-  'teachers',
-  'students',
-];
-
-console.log('Dropping existing tables (if any)...');
-db.pragma('foreign_keys = OFF');
-for (const table of tables) {
-  db.exec(`DROP TABLE IF EXISTS ${table}`);
-}
-db.pragma('foreign_keys = ON');
-
-const schemaPath = path.join(process.cwd(), 'backend', 'db', 'schema.sql');
-const seedPath = path.join(process.cwd(), 'backend', 'db', 'seed.sql');
->>>>>>> 8dbd0e19b3dc829c0023e44c7c82316412f7f426
 
 async function main() {
   const reset = process.env.RESET_DB === 'true' || process.env.RESET_DB === '1';
