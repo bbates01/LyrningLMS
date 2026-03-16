@@ -17,29 +17,45 @@ if (!fs.existsSync(dbDir)) {
 const db = new Database(dbPath);
 db.pragma('foreign_keys = ON');
 
-const tables = [
-  'assignment_question_options',
-  'assignment_questions',
-  'assignment_documents',
-  'student_metrics',
-  'student_grades',
-  'student_classes',
-  'assignments',
-  'classes',
-  'subjects',
-  'teachers',
-  'students',
-];
-
-console.log('Dropping existing tables (if any)...');
-db.pragma('foreign_keys = OFF');
-for (const table of tables) {
-  db.exec(`DROP TABLE IF EXISTS ${table}`);
-}
-db.pragma('foreign_keys = ON');
-
 const schemaPath = path.join(process.cwd(), 'backend', 'db', 'schema.sql');
 const seedPath = path.join(process.cwd(), 'backend', 'db', 'seed.sql');
+
+const shouldReset = process.env.RESET_SQLITE_DB === '1' || process.env.RESET_SQLITE_DB === 'true';
+const hasStudentsTable =
+  db
+    .prepare(
+      `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`
+    )
+    .get('students') != null;
+
+if (hasStudentsTable && !shouldReset) {
+  console.log('SQLite database already initialized at', dbPath);
+  db.close();
+  process.exit(0);
+}
+
+if (shouldReset) {
+  const tables = [
+    'assignment_question_options',
+    'assignment_questions',
+    'assignment_documents',
+    'student_metrics',
+    'student_grades',
+    'student_classes',
+    'assignments',
+    'classes',
+    'subjects',
+    'teachers',
+    'students',
+  ];
+
+  console.log('RESET_SQLITE_DB enabled: dropping existing tables (if any)...');
+  db.pragma('foreign_keys = OFF');
+  for (const table of tables) {
+    db.exec(`DROP TABLE IF EXISTS ${table}`);
+  }
+  db.pragma('foreign_keys = ON');
+}
 
 console.log('Running schema...');
 const schemaSql = fs.readFileSync(schemaPath, 'utf-8');

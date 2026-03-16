@@ -19,7 +19,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiBase =
+        import.meta.env.VITE_API_URL ||
+        (import.meta.env.DEV ? 'http://localhost:3001' : '');
       const response = await fetch(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: {
@@ -53,7 +55,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setError(data.error || 'Login failed. Please check your credentials.');
       }
     } catch (err) {
-      setError('Connection error. Make sure the backend server is running on port 3001.');
+      setError('Connection error. Make sure the backend server is running.');
       console.error('Login error:', err);
     } finally {
       setLoading(false);
