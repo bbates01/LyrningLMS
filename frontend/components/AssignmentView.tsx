@@ -50,42 +50,44 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 min-h-[calc(100vh-220px)]">
+    <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 h-[calc(100dvh-160px)] lg:h-[calc(100dvh-220px)] overflow-hidden">
       {/* Assignment Content */}
-      <div className="flex-1 flex flex-col gap-4 lg:gap-6 overflow-y-auto pr-0 lg:pr-4">
+      <div className="flex-[2] lg:flex-1 flex flex-col gap-4 lg:gap-6 pr-0 lg:pr-4 min-h-0 overflow-hidden">
         <h2 className="text-2xl sm:text-3xl font-bold text-black break-words">{assignment.title}</h2>
         
-        <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-8 lg:p-10 shadow-sm relative">
-          {questionsPreview.length > 0 ? (
-            <div className="space-y-8">
-              {questionsPreview.map((q, idx) => (
-                <div key={q.questionId || idx} className="space-y-3">
-                  <p className="font-semibold text-black">
-                    {q.sortOrder}. {q.questionText}
-                    {q.questionType === 'select_all_that_apply' && (
-                      <span className="ml-2 text-sm font-normal text-gray-500 italic">(Select all that apply)</span>
-                    )}
-                  </p>
-                  <ul className="list-none space-y-2 pl-0">
-                    {q.options.map((opt, oidx) => (
-                      <li key={oidx} className="text-gray-700">
-                        <span className={opt.isCorrect ? 'font-medium text-green-700' : ''}>
-                          {String.fromCharCode(65 + oidx)}. {opt.optionText}
-                          {opt.isCorrect ? ' (Correct)' : ''}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="prose max-w-none text-black leading-relaxed whitespace-pre-wrap font-medium">
-              {assignment.content || 'No questions for this assignment yet.'}
-            </div>
-          )}
+        <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-8 lg:p-10 shadow-sm relative flex flex-col min-h-[45dvh] lg:min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            {questionsPreview.length > 0 ? (
+              <div className="space-y-8">
+                {questionsPreview.map((q, idx) => (
+                  <div key={q.questionId || idx} className="space-y-3">
+                    <p className="font-semibold text-black">
+                      {q.sortOrder}. {q.questionText}
+                      {q.questionType === 'select_all_that_apply' && (
+                        <span className="ml-2 text-sm font-normal text-gray-500 italic">(Select all that apply)</span>
+                      )}
+                    </p>
+                    <ul className="list-none space-y-2 pl-0">
+                      {q.options.map((opt, oidx) => (
+                        <li key={oidx} className="text-gray-700">
+                          <span className={opt.isCorrect ? 'font-medium text-green-700' : ''}>
+                            {String.fromCharCode(65 + oidx)}. {opt.optionText}
+                            {opt.isCorrect ? ' (Correct)' : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="prose max-w-none text-black leading-relaxed whitespace-pre-wrap font-medium">
+                {assignment.content || 'No questions for this assignment yet.'}
+              </div>
+            )}
+          </div>
 
-          <div className="mt-8 sm:mt-10 lg:mt-12 flex items-center gap-4">
+          <div className="mt-6 sm:mt-8 flex items-center gap-4 pt-6 border-t border-gray-100">
             <div className="flex-1 relative">
               <input 
                 type="text" 
@@ -101,8 +103,8 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({ assignment, onViewTeach
       </div>
 
       {/* AI Tutor Sidebar */}
-      <div className="w-full lg:w-[450px] flex flex-col gap-4">
-        <div className="flex-1 bg-white border border-gray-100 rounded-3xl shadow-sm flex flex-col overflow-hidden">
+      <div className="w-full lg:w-[450px] flex-1 lg:flex-none flex flex-col gap-4 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-[28dvh] lg:min-h-0 bg-white border border-gray-100 rounded-3xl shadow-sm flex flex-col overflow-hidden">
           {/* Messages area */}
           <div className="flex-1 p-6 overflow-y-auto space-y-4" ref={scrollRef}>
             {messages.length === 0 && (
