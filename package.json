@@ -11,8 +11,8 @@
     "dev:both": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "tsx watch backend/server.ts",
     "dev:frontend": "cd frontend && vite",
-    "build": "vite build --root frontend",
-    "preview": "vite preview --root frontend",
+    "build": "cd frontend && vite build",
+    "preview": "cd frontend && vite preview",
     "db:init": "tsx backend/db/init-db.ts"
   },
   "dependencies": {
