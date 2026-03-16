@@ -55,7 +55,8 @@ CREATE TABLE assignments (
     description     TEXT,
     type            TEXT,
     max_points      REAL NOT NULL DEFAULT 100,
-    due_date        TIMESTAMPTZ
+    due_date        TIMESTAMPTZ,
+    assignment_link TEXT UNIQUE
 );
 
 -- Note: assignment_documents table removed; PDFs are not stored.
