@@ -335,8 +335,6 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
             </div>
             <button className="lyr-modal-save" onClick={() => setShowAIConfig(false)}>Save Settings</button>
           </div>
-        </div>
-      )}
 
       <nav className="lyr-nav">
         <span className="lyr-nav-name">New Assignment</span>
@@ -357,10 +355,7 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
             <div className="lyr-label-row">
               <label className="lyr-label">Description</label>
             </div>
-            <textarea className="lyr-textarea" value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="What should students know about this assignment?" />
-          </div>
+          )}
 
           <div className="lyr-section">
             <div className="lyr-label-row">
@@ -378,9 +373,15 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
                   <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
               </div>
-              <div className="lyr-drop-main">Drop files here or <span>browse</span></div>
-              <div className="lyr-drop-sub">PDF, DOCX, PNG — up to 25MB each</div>
-              <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileInput} />
+              <label className="flex items-center gap-2 text-xs font-medium text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeSelectAllThatApply}
+                  onChange={(e) => setIncludeSelectAllThatApply(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                Include &quot;select all that apply&quot; questions
+              </label>
             </div>
             {isUploading && (
               <p style={{ color: MUTED, fontSize: 13, marginTop: 8 }}>Uploading...</p>
@@ -410,6 +411,21 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
               </div>
             )}
           </div>
+          <textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            placeholder="Describe what kind of questions or assignment you want generated based on the uploaded material."
+            className="w-full bg-gray-50 resize-none h-40 focus:outline-none text-gray-700 text-sm rounded-2xl p-4 border border-gray-200"
+          />
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className="mt-2 px-6 py-2.5 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-50"
+          >
+            {isGenerating ? 'Generating…' : 'Generate with AI'}
+          </button>
+        </div>
 
           <div className="lyr-section">
             <div className="lyr-label-row">
@@ -422,6 +438,13 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
                 Edit
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowReview(false)}
+              className="px-3 py-1.5 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+            >
+              Back to setup
+            </button>
           </div>
 
           <div className="lyr-section">
@@ -432,8 +455,34 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
               onChange={e => setSpecialRequest(e.target.value)}
               placeholder="Any extra instructions? e.g. 'Focus on chapter 3', 'Add a word problem'..." />
           </div>
+        </div>
+      )}
 
-          <button className="lyr-create-btn">Create Assignment</button>
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !isSaving && setShowConfirmModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+            <p className="text-gray-900 font-medium mb-2">Confirm Questions?</p>
+            <p className="text-sm text-gray-600 mb-4">Any unsaved changes will not be applied.</p>
+            {confirmError && <p className="text-sm mb-3" style={{ color: '#ba3638' }}>{confirmError}</p>}
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-full border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100 disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmYes}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-full bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+              >
+                {isSaving ? 'Saving…' : 'Yes'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

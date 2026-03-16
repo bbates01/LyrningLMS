@@ -65,13 +65,32 @@ CREATE TABLE assignments (
     assignment_link TEXT UNIQUE
 );
 
--- Assignment PDF documents (stored in DB as BLOB)
+-- Assignment PDF documents (stored in DB as BLOB; multiple per assignment)
 CREATE TABLE assignment_documents (
-    assignment_id INTEGER PRIMARY KEY REFERENCES assignments(assignment_id) ON DELETE CASCADE,
+    document_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL REFERENCES assignments(assignment_id) ON DELETE CASCADE,
     filename      TEXT,
     mime_type     TEXT NOT NULL DEFAULT 'application/pdf',
     pdf_blob      BLOB NOT NULL,
     uploaded_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Assignment questions (one per question; order by sort_order)
+CREATE TABLE assignment_questions (
+    question_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL REFERENCES assignments(assignment_id) ON DELETE CASCADE,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    question_text TEXT NOT NULL,
+    question_type TEXT NOT NULL DEFAULT 'multiple_choice',
+    correct_answer TEXT
+);
+
+-- Options for a question (e.g. multiple-choice options; front end randomizes display order)
+CREATE TABLE assignment_question_options (
+    option_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_id  INTEGER NOT NULL REFERENCES assignment_questions(question_id) ON DELETE CASCADE,
+    option_text  TEXT NOT NULL,
+    is_correct   INTEGER NOT NULL DEFAULT 0
 );
 
 -- Student Grades (per assignment)
@@ -109,6 +128,9 @@ CREATE TABLE student_metrics (
 CREATE INDEX idx_classes_subject    ON classes(subject_id);
 CREATE INDEX idx_classes_teacher    ON classes(teacher_id);
 CREATE INDEX idx_assignments_class  ON assignments(class_id);
+CREATE INDEX idx_assignment_documents_assignment ON assignment_documents(assignment_id);
+CREATE INDEX idx_assignment_questions_assignment ON assignment_questions(assignment_id);
+CREATE INDEX idx_assignment_question_options_question ON assignment_question_options(question_id);
 CREATE INDEX idx_grades_student     ON student_grades(student_id);
 CREATE INDEX idx_grades_assignment  ON student_grades(assignment_id);
 CREATE INDEX idx_metrics_student    ON student_metrics(student_id);

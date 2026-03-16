@@ -13,21 +13,14 @@ const ClassInfo: React.FC<ClassInfoProps> = ({ classInfo }) => {
         <div className="p-6 space-y-6">
           <div>
             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Class name</p>
-            <p className="text-xl font-bold text-black mt-1">{classInfo.class_name}</p>
+            <p className="text-xl font-bold text-black mt-1 break-words">{classInfo.class_name}</p>
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Subject</p>
-            <p className="text-lg text-black mt-1">{classInfo.subject_code}</p>
+            <p className="text-lg text-black mt-1 break-words">{classInfo.subject_code}</p>
             {classInfo.subject_description && (
               <p className="text-gray-600 mt-1">{classInfo.subject_description}</p>
             )}
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Class code</p>
-            <p className="text-2xl font-mono font-bold text-black mt-1 tracking-wider bg-gray-50 px-4 py-3 rounded-xl inline-block">
-              {classInfo.class_code || '—'}
-            </p>
-            <p className="text-sm text-gray-500 mt-2">Students can use this code to enroll in the class.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-gray-100">
             {classInfo.period && (

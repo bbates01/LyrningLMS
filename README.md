@@ -10,7 +10,7 @@ A learning management system that integrates AI as a guided learning tool while 
 
 **Problem:** Teenagers increasingly rely on AI to complete work without learning. Educators need a way to use AI in the classroom that supports understanding instead of shortcuts.
 
-**Product value:** LyrningLMS gives teachers a single place to create assignments, quizzes, labs, and projects and to embed Google’s Gemini API with configurable guardrails. Students get AI help that stays within teacher-set restrictions, while teachers see metrics on understanding, engagement, and AI dependency. That lets educators spot over-reliance early and adjust support. The result: students build independent problem-solving skills while using AI as a learning aid, not a crutch.
+**Product value:** LyrningLMS gives teachers a single place to create assignments, quizzes, labs, and projects and to embed the Groq API with configurable guardrails. Students get AI help that stays within teacher-set restrictions, while teachers see metrics on understanding, engagement, and AI dependency. That lets educators spot over-reliance early and adjust support. The result: students build independent problem-solving skills while using AI as a learning aid, not a crutch.
 
 ---
 
@@ -23,12 +23,12 @@ Organized by layer:
 | **Frontend** | React, TypeScript, Vite (build and dev server), component-based UI |
 | **Backend** | Node.js, Express.js (REST API) |
 | **Data** | SQLite (relational database, single file) |
-| **External** | Google Gemini API (AI learning assistance) |
+| **External** | Groq API (AI learning assistance) |
 
 - **Frontend:** React with TypeScript; Vite for fast builds and HMR.
 - **Backend:** Node.js and Express for auth, classes, assignments, and enrollment.
 - **Database:** SQLite with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
-- **APIs:** REST for the app; Gemini for in-assignment AI tutoring.
+- **APIs:** REST for the app; Groq for in-assignment AI tutoring.
 
 ---
 
@@ -54,14 +54,14 @@ Organized by layer:
      │ SQL                                                    │ HTTPS
      ▼                                                        ▼
 ┌──────────────────┐                          ┌──────────────────────┐
-│   SQLite         │                          │  Google Gemini API   │
+│   SQLite         │                          │  Groq API            │
 │   (lyrning.sqlite) │                         │  (AI tutor)          │
 └──────────────────┘                          └──────────────────────┘
 ```
 
 - **Browser:** Teachers and students use the same app; role is determined at login.
 - **Frontend:** SPA that calls the backend for auth, class list, enrollment, and assignments.
-- **Backend:** Serves REST endpoints; talks to SQLite and (for AI) to Gemini.
+- **Backend:** Serves REST endpoints; talks to SQLite and (for AI) to Groq.
 - **Database:** Holds users, classes, enrollments, assignments, and grades. **Class codes** (see below) allow students to join classes without exposing primary keys.
 
 ---
@@ -81,7 +81,7 @@ The database uses a **`class_code`** (e.g. `R7T4W9YZ`) on each class in addition
   - Verify with: `node --version` (should show something like `v20.x.x`).
 - **npm** (included with Node)  
   `npm --version`
-- **Google Gemini API key** (optional; **not required** for testing the vertical slice) — [ai.google.dev](https://ai.google.dev)
+- **Groq API key** (optional; **not required** for testing the vertical slice) — [console.groq.com](https://console.groq.com)
 
 No separate database server is required; the app uses **SQLite** (single file).
 
@@ -109,12 +109,12 @@ SQLITE_DB_PATH=./backend/db/lyrning.sqlite
 PORT=3001
 VITE_API_URL=http://localhost:3001
 NODE_ENV=development
-GEMINI_API_KEY=your_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
 - `SQLITE_DB_PATH` is the path to the SQLite database file (default: `./backend/db/lyrning.sqlite`).
 - `PORT` is the backend port. Set `VITE_API_URL` to the same base URL (e.g. `http://localhost:3001`) so the frontend can reach the API.
-- `GEMINI_API_KEY` is not required for testing the vertical slice (add a student to a class by class code).
+- `GROQ_API_KEY` is used by the backend for the AI tutor and assignment question generation. Get a key at [console.groq.com](https://console.groq.com). Not required for testing the vertical slice (e.g. add a student to a class by class code).
 
 ### 3. Database
 
@@ -189,3 +189,57 @@ Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (
 - **`backend/db/`** — `schema.sql`, `seed.sql`, optional migration scripts.
 
 A new teammate can run the project by: installing Node, copying `.env`, running `npm run db:init`, and running `npm run dev`, then following the verification steps above.
+
+# EARS Requirements
+
+## Complete
+
+1. When a teacher uploads course material (PDF), the system shall store the material for assignment generation.
+
+2. When course material is uploaded, the system shall generate assignment questions using AI.
+
+3. When AI generates assignment questions, the system shall allow teachers to edit the questions before confirming them.
+
+4. When a teacher confirms generated questions, the system shall store the questions and answers in the database.
+
+5. When a teacher logs into the system, the system shall allow navigation to the assignment creation page.
+
+6. The system shall allow teachers to upload assignment materials (e.g., class PDFs).
+
+7. The system shall support AI parameter configuration using a default parameter file.
+
+8. When an assignment is created, the system shall store AI parameters associated with that assignment in the database.
+
+---
+
+## Not Complete
+
+1. When an assignment is created, the system shall generate a shareable assignment link for teachers.
+
+2. When a teacher requests an assignment link, the system shall allow the teacher to copy the link to share with students.
+
+3. When a student opens an assignment link, the system shall allow the student to access the assignment page.
+
+4. When a user attempts to log in, the system shall restrict the teacher login page to teacher credentials only.
+
+5. When a student attempts to access assignments, the system shall provide a student-specific access page through assignment links.
+
+6. The system documentation shall include an updated ERD reflecting AI assignment parameters and related schema changes.
+
+7. All developers shall clone the GitHub repository and configure their environment according to the README instructions.
+
+8. When a student accesses an assignment, the system shall provide an assessment page interface for completing the assignment.
+
+9. When a student opens an assignment completion page, the system shall synchronize assignment questions and answers from the database.
+
+10. When a student logs in, the system shall authenticate the student credentials before allowing access to the assignment completion page.
+
+11. When a student completes an assignment, the system shall synchronize the completed assignment data with the teacher’s system.
+
+12. When a student completes an assignment, the system shall generate performance metrics based on the student’s responses.
+
+13. When a student submits an assignment, the system shall assign a default grade based on the accuracy of the student’s answers.
+
+14. When a student interacts with the assignment system, the system shall provide an AI chat interface for assistance.
+
+15. When generating assignments, the system shall combine the default AI parameters and the custom teacher instructions defined in the assignment configuration.
