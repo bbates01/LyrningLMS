@@ -76,23 +76,23 @@ INSERT INTO student_classes (student_id, class_id, enrollment_date, status) VALU
 -- -----------------------------------------------
 -- Assignments
 -- -----------------------------------------------
-INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date) VALUES
+INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link) VALUES
 -- Algebra II (class 1)
-(1, 'Chapter 1 Quiz',          'Linear equations and inequalities',    'quiz',       25,  '2025-09-05 23:59:00'),
-(1, 'Midterm Exam',            'Chapters 1-4 comprehensive exam',      'exam',       100, '2025-10-15 23:59:00'),
-(1, 'Polynomial Homework Set', 'Practice problems on polynomials',     'homework',   20,  '2025-09-19 23:59:00'),
+(1, 'Chapter 1 Quiz',          'Linear equations and inequalities',    'quiz',       25,  '2025-09-05 23:59:00', 'a1b2c3d4e5f6'),
+(1, 'Midterm Exam',            'Chapters 1-4 comprehensive exam',      'exam',       100, '2025-10-15 23:59:00', 'b2c3d4e5f6g7'),
+(1, 'Polynomial Homework Set', 'Practice problems on polynomials',     'homework',   20,  '2025-09-19 23:59:00', 'c3d4e5f6g7h8'),
 -- English Lit (class 2)
-(2, 'Short Story Analysis',    'Analyze a short story of your choice', 'essay',      50,  '2025-09-12 23:59:00'),
-(2, 'Poetry Response',         'Written response to assigned poems',   'essay',      40,  '2025-10-01 23:59:00'),
-(2, 'Midterm Essay',           'Comparative essay, two novels',        'exam',       100, '2025-10-16 23:59:00'),
+(2, 'Short Story Analysis',    'Analyze a short story of your choice', 'essay',      50,  '2025-09-12 23:59:00', 'd4e5f6g7h8i9'),
+(2, 'Poetry Response',         'Written response to assigned poems',   'essay',      40,  '2025-10-01 23:59:00', 'e5f6g7h8i9j0'),
+(2, 'Midterm Essay',           'Comparative essay, two novels',        'exam',       100, '2025-10-16 23:59:00', 'f6g7h8i9j0k1'),
 -- Biology (class 3)
-(3, 'Cell Structure Lab',      'Microscopy lab report',                'lab',        50,  '2025-09-10 23:59:00'),
-(3, 'DNA & Genetics Quiz',     'Quiz on chapters 3-4',                 'quiz',       30,  '2025-09-25 23:59:00'),
-(3, 'Ecosystem Research Paper','Research paper on a local ecosystem',  'project',    75,  '2025-11-01 23:59:00'),
+(3, 'Cell Structure Lab',      'Microscopy lab report',                'lab',        50,  '2025-09-10 23:59:00', 'g7h8i9j0k1l2'),
+(3, 'DNA & Genetics Quiz',     'Quiz on chapters 3-4',                 'quiz',       30,  '2025-09-25 23:59:00', 'h8i9j0k1l2m3'),
+(3, 'Ecosystem Research Paper','Research paper on a local ecosystem',  'project',    75,  '2025-11-01 23:59:00', 'i9j0k1l2m3n4'),
 -- Intro to CS (class 4)
-(4, 'Hello World Project',     'First Python program',                 'project',    20,  '2025-09-08 23:59:00'),
-(4, 'Loops & Conditionals HW', 'Coding exercises on control flow',     'homework',   30,  '2025-09-22 23:59:00'),
-(4, 'Final Project',           'Build a small interactive program',    'project',    100, '2025-12-01 23:59:00');
+(4, 'Hello World Project',     'First Python program',                 'project',    20,  '2025-09-08 23:59:00', 'j0k1l2m3n4o5'),
+(4, 'Loops & Conditionals HW', 'Coding exercises on control flow',     'homework',   30,  '2025-09-22 23:59:00', 'k1l2m3n4o5p6'),
+(4, 'Final Project',           'Build a small interactive program',    'project',    100, '2025-12-01 23:59:00', 'l2m3n4o5p6q7');
 
 -- -----------------------------------------------
 -- Student Grades
