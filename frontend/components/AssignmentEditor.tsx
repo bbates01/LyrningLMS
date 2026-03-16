@@ -1,286 +1,377 @@
-import React, { useRef, useState } from 'react';
-import { Pencil, Upload, CheckCircle2 } from './Icons';
-import { generateAssignmentQuestions, type GenerateQuestionsResponse } from '../services/aiService';
-import { uploadAssignmentPdf, createAssignment, saveAssignmentQuestions } from '../services/api';
+import React, { useState, useRef } from 'react';
+import { uploadAssignmentPdf } from '../services/api';
 
-function formatQuestionsForDisplay(data: GenerateQuestionsResponse): string {
-  const lines: string[] = [];
-  lines.push('Directions: ' + (data.directions || ''));
-  lines.push('');
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  for (const q of data.questions) {
-    lines.push(`${q.questionNumber}. ${q.question}`);
-    const correctList = (q.correctAnswers && q.correctAnswers.length > 0)
-      ? q.correctAnswers
-      : (q.correctAnswer ? [q.correctAnswer] : []);
-    const falseList = q.falseAnswers || [];
-    let letterIdx = 0;
-    for (const c of correctList) {
-      if (c != null && String(c).trim() !== '') {
-        lines.push(`${letters[letterIdx]}. ${String(c).trim()} (Correct)`);
-        letterIdx++;
-      }
-    }
-    for (const fa of falseList) {
-      if (fa != null && String(fa).trim() !== '') {
-        lines.push(`${letters[letterIdx]}. ${String(fa).trim()}`);
-        letterIdx++;
-      }
-    }
-    lines.push('');
-  }
-  return lines.join('\n').trimEnd();
-}
-
-function parseQuestionsFromDisplayText(text: string): GenerateQuestionsResponse | null {
-  let directions = '';
-  const dirMatch = text.match(/^Directions:\s*(.*?)(?=\n\n|\n\d+\.\s)/s);
-  if (dirMatch) directions = dirMatch[1].trim();
-
-  const rest = text.replace(/^Directions:\s*(.*?)(?=\n\n|\n\d+\.\s)/s, '').trim();
-  const blocks = rest.split(/\n(?=\d+\.\s)/).filter((b) => /^\d+\.\s/.test(b.trim()));
-
-  const questions: GenerateQuestionsResponse['questions'] = [];
-
-  for (const block of blocks) {
-    const lines = block.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    if (lines.length === 0) continue;
-    const firstLine = lines[0];
-    const numMatch = firstLine.match(/^(\d+)\.\s*(.*)$/);
-    if (!numMatch) continue;
-    const questionNumber = parseInt(numMatch[1], 10);
-    const questionText = numMatch[2].trim();
-    const correctAnswers: string[] = [];
-    const falseAnswers: string[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const m = lines[i].match(/^([A-Z])\.\s*(.*)$/);
-      if (!m) continue;
-      const optText = m[2].replace(/\s*\(Correct\)\s*$/i, '').trim();
-      if (lines[i].toLowerCase().includes('(correct)')) correctAnswers.push(optText);
-      else falseAnswers.push(optText);
-    }
-    if (correctAnswers.length > 1) {
-      questions.push({ questionNumber, question: questionText, correctAnswers, falseAnswers, questionType: 'select_all_that_apply' });
-    } else {
-      questions.push({ questionNumber, question: questionText, correctAnswer: correctAnswers[0] ?? '', falseAnswers });
-    }
-  }
-
-  if (questions.length === 0) return null;
-  return { directions, questions };
-}
+const BRAND = '#D96B6B';
+const BRAND_LIGHT = '#F2DADA';
+const BG = '#FFFFFF';
+const CARD = '#FFFFFF';
+const INPUT_BG = '#F4F4F6';
+const TEXT = '#1C2128';
+const MUTED = '#8A8FA8';
+const BORDER = '#E8E8EC';
 
 interface Props {
   classId: number;
   teacherId: number;
-  onAssignmentCreated?: () => void;
 }
 
-interface PendingFile {
-  name: string;
-  file: File;
-}
-
-const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCreated }) => {
+export default function AssignmentEditor({ classId, teacherId }: Props) {
   const [title, setTitle] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [result, setResult] = useState('');
-  const [questionsData, setQuestionsData] = useState<GenerateQuestionsResponse | null>(null);
-  const [questionCount, setQuestionCount] = useState<number>(7);
-  const [includeSelectAllThatApply, setIncludeSelectAllThatApply] = useState(false);
-  const [showReview, setShowReview] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [description, setDescription] = useState('');
+  const [specialRequest, setSpecialRequest] = useState('');
+  const [files, setFiles] = useState<{ name: string; size: string }[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [confirmError, setConfirmError] = useState('');
+  const [showAIConfig, setShowAIConfig] = useState(false);
+  const [aiConfig, setAiConfig] = useState({
+    model: 'gemini-pro',
+    temperature: 0.7,
+    questionCount: 7,
+    includeMultipleChoice: true,
+    difficulty: 'medium',
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGenerate = async () => {
-    if (!title.trim()) {
-      setUploadError('Please enter an assignment title before generating questions.');
-      return;
-    }
-
-    try {
-      setIsGenerating(true);
-      setUploadError('');
-      const fileNames = pendingFiles.map((f) => f.name);
-      const data = await generateAssignmentQuestions(
-        title || 'Assignment',
-        fileNames,
-        instructions,
-        questionCount,
-        includeSelectAllThatApply,
-      );
-      setQuestionsData(data);
-      setResult(formatQuestionsForDisplay(data));
-      setShowReview(true);
-    } catch (err) {
-      setResult(err instanceof Error ? err.message : 'Error generating questions.');
-      setQuestionsData(null);
-      setShowReview(true);
-    } finally {
-      setIsGenerating(false);
-    }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = Array.from(e.dataTransfer.files).map(f => ({
+      name: f.name,
+      size: (f.size / 1024 / 1024).toFixed(1) + ' MB',
+    }));
+    setFiles(prev => [...prev, ...dropped]);
   };
 
-  const handleSave = () => {
-    const parsed = parseQuestionsFromDisplayText(result);
-    if (!parsed) {
-      setUploadError('Could not parse questions. Keep the format: "1. Question\nA. Correct (Correct)\nB. ..."');
-      return;
-    }
-    setQuestionsData(parsed);
-    setResult(formatQuestionsForDisplay(parsed));
-    setUploadError('');
-  };
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const selected = Array.from(e.target.files);
 
-  const handleConfirmYes = async () => {
-    if (!questionsData || questionsData.questions.length === 0) {
-      setConfirmError('No questions to save.');
-      return;
-    }
-    setConfirmError('');
-    setIsSaving(true);
-    try {
-      const createRes = await createAssignment(classId, teacherId, title.trim(), questionsData.directions);
-      if (!createRes.success || createRes.assignmentId == null) {
-        setConfirmError(createRes.error || 'Failed to create assignment.');
-        return;
-      }
-      const newAssignmentId = createRes.assignmentId;
-      for (const { file } of pendingFiles) {
-        const up = await uploadAssignmentPdf(classId, teacherId, file, title.trim(), newAssignmentId);
-        if (!up.success) {
-          setConfirmError(up.error || 'Failed to attach PDF.');
-          return;
+    for (const file of selected) {
+      if (file.type === 'application/pdf' && title.trim()) {
+        setIsUploading(true);
+        setUploadError('');
+        const res = await uploadAssignmentPdf(classId, teacherId, file, title.trim());
+        setIsUploading(false);
+        if (!res.success) {
+          setUploadError(res.error || 'Upload failed.');
+          continue;
         }
       }
-      const payload = questionsData.questions.map((q) => {
-        if (q.questionType === 'select_all_that_apply' && q.correctAnswers && q.correctAnswers.length > 0) {
-          return { questionText: q.question, questionType: 'select_all_that_apply' as const, correctAnswers: q.correctAnswers, falseAnswers: q.falseAnswers || [] };
-        }
-        return { questionText: q.question, correctAnswer: q.correctAnswer ?? '', falseAnswers: q.falseAnswers || [] };
-      });
-      const saveRes = await saveAssignmentQuestions(classId, newAssignmentId, payload);
-      if (!saveRes.success) {
-        setConfirmError(saveRes.error || 'Failed to save questions.');
-        return;
-      }
-      setShowConfirmModal(false);
-      setShowReview(false);
-      setResult('');
-      setQuestionsData(null);
-      setPendingFiles([]);
-      onAssignmentCreated?.();
-    } finally {
-      setIsSaving(false);
+      setFiles(prev => [...prev, {
+        name: file.name,
+        size: (file.size / 1024 / 1024).toFixed(1) + ' MB',
+      }]);
     }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
     e.target.value = '';
-
-    if (!title.trim()) {
-      setUploadError('Please enter an assignment title first.');
-      return;
-    }
-
-    setUploadError('');
-    setPendingFiles((prev) => [...prev, { name: file.name, file }]);
   };
+
+  const removeFile = (idx: number) => setFiles(prev => prev.filter((_, i) => i !== idx));
 
   return (
-    <div className="space-y-8 pb-6">
-      <div className="flex items-center gap-2 border-b-2 border-gray-900 pb-2 max-w-md">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="ADD ASSIGNMENT TITLE"
-          className="text-2xl font-bold bg-transparent focus:outline-none flex-1 placeholder:text-gray-300"
-        />
-        <Pencil className="w-6 h-6 text-gray-500" />
-      </div>
+    <div style={{
+      minHeight: '100vh',
+      background: BG,
+      fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-      {!showReview && (
-      <div className="space-y-6">
-        <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Attached Materials
-            </h2>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-300 text-gray-600 text-xs font-medium hover:bg-gray-100 transition-colors"
-            >
-              <Upload className="w-4 h-4" />
-              Add PDF
-            </button>
+        .lyr-nav {
+          height: 56px;
+          background: ${CARD};
+          border-bottom: 1px solid ${BORDER};
+          display: flex;
+          align-items: center;
+          padding: 0 32px;
+          gap: 10px;
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
+        .lyr-nav-name {
+          font-size: 18px; font-weight: 700; color: ${TEXT}; letter-spacing: -0.3px;
+        }
+        .lyr-nav-spacer { flex: 1; }
+
+        .lyr-main {
+          max-width: 860px;
+          margin: 0 auto;
+          padding: 40px 48px 80px;
+        }
+
+        .lyr-content { width: 100%; }
+
+        .lyr-section { margin-bottom: 32px; }
+
+        .lyr-label-row {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        .lyr-label { font-size: 14px; font-weight: 700; color: ${TEXT}; }
+
+        .lyr-input, .lyr-textarea {
+          width: 100%;
+          background: ${INPUT_BG};
+          border: 1.5px solid transparent;
+          border-radius: 12px;
+          padding: 13px 16px;
+          font-family: inherit; font-size: 15px; color: ${TEXT};
+          outline: none; resize: none;
+          transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .lyr-input::placeholder, .lyr-textarea::placeholder { color: #BCBFCC; }
+        .lyr-input:focus, .lyr-textarea:focus {
+          border-color: ${BRAND};
+          box-shadow: 0 0 0 3px ${BRAND_LIGHT};
+        }
+        .lyr-input-title { font-size: 20px; font-weight: 600; }
+        .lyr-textarea { min-height: 120px; line-height: 1.65; }
+        .lyr-textarea-sm { min-height: 90px; }
+
+        .lyr-drop {
+          background: ${INPUT_BG};
+          border: 2px dashed #DDDFE8;
+          border-radius: 12px;
+          padding: 32px 24px;
+          text-align: center;
+          cursor: pointer;
+          transition: border-color 0.15s, background 0.15s;
+        }
+        .lyr-drop:hover, .lyr-drop.dragging {
+          border-color: ${BRAND}; background: #FDF6F6;
+        }
+        .lyr-upload-icon {
+          width: 44px; height: 44px;
+          background: ${BRAND_LIGHT}; border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 12px;
+        }
+        .lyr-drop-main { font-size: 14px; color: ${TEXT}; font-weight: 500; margin-bottom: 3px; }
+        .lyr-drop-main span { color: ${BRAND}; text-decoration: underline; }
+        .lyr-drop-sub { font-size: 12px; color: ${MUTED}; }
+
+        .lyr-files { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+        .lyr-file {
+          display: flex; align-items: center; gap: 10px;
+          background: ${INPUT_BG}; border-radius: 10px; padding: 10px 13px;
+        }
+        .lyr-file-icon {
+          width: 30px; height: 30px;
+          background: ${BRAND}; border-radius: 8px;
+          flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        }
+        .lyr-file-name {
+          flex: 1; font-size: 13px; font-weight: 500; color: ${TEXT};
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .lyr-file-size { font-size: 12px; color: ${MUTED}; flex-shrink: 0; }
+        .lyr-file-rm {
+          background: none; border: none; cursor: pointer;
+          color: ${MUTED}; padding: 3px; border-radius: 6px; display: flex;
+          transition: color 0.15s, background 0.15s;
+        }
+        .lyr-file-rm:hover { color: ${BRAND}; background: ${BRAND_LIGHT}; }
+
+        .lyr-ai-btn {
+          display: flex; align-items: center; gap: 5px;
+          background: ${INPUT_BG}; border: none; border-radius: 8px;
+          padding: 6px 11px;
+          font-family: inherit; font-size: 12px; font-weight: 600;
+          color: ${MUTED}; cursor: pointer;
+          transition: background 0.15s, color 0.15s;
+          letter-spacing: 0.1px;
+        }
+        .lyr-ai-btn:hover { color: ${TEXT}; background: #E4E5EA; }
+
+        .lyr-create-btn {
+          background: ${BRAND}; color: white;
+          border: none; border-radius: 12px; padding: 14px 32px;
+          font-family: inherit; font-size: 15px; font-weight: 700;
+          cursor: pointer;
+          transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+          box-shadow: 0 4px 14px rgba(217,107,107,0.3);
+        }
+        .lyr-create-btn:hover {
+          background: #C85F5F; transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(217,107,107,0.4);
+        }
+        .lyr-create-btn:active { transform: none; }
+
+        .lyr-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.22);
+          backdrop-filter: blur(6px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 300;
+          animation: overlayIn 0.15s ease;
+        }
+        @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .lyr-modal {
+          background: ${CARD};
+          border-radius: 20px;
+          padding: 28px;
+          width: 100%; max-width: 420px;
+          margin: 20px;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+          animation: modalIn 0.18s ease;
+        }
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.96) translateY(8px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .lyr-modal-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 22px;
+        }
+        .lyr-modal-title { font-size: 17px; font-weight: 700; color: ${TEXT}; }
+        .lyr-modal-close {
+          width: 30px; height: 30px;
+          background: ${INPUT_BG}; border: none; border-radius: 8px;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          color: ${MUTED}; transition: background 0.15s, color 0.15s;
+        }
+        .lyr-modal-close:hover { background: #ECEDF0; color: ${TEXT}; }
+
+        .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .cfg-span2 { grid-column: span 2; }
+        .cfg-lbl {
+          display: block; font-size: 10px; font-weight: 700;
+          letter-spacing: 1.5px; text-transform: uppercase; color: ${MUTED}; margin-bottom: 6px;
+        }
+        .cfg-sel, .cfg-num {
+          width: 100%; background: ${INPUT_BG}; border: none;
+          border-radius: 9px; padding: 10px 12px;
+          font-family: inherit; font-size: 14px; color: ${TEXT};
+          outline: none; -webkit-appearance: none;
+          transition: box-shadow 0.15s;
+        }
+        .cfg-sel:focus, .cfg-num:focus { box-shadow: 0 0 0 2px ${BRAND}; }
+        .cfg-toggle-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+        .cfg-toggle-text { font-size: 14px; color: ${TEXT}; }
+        .cfg-pill {
+          width: 44px; height: 26px; border-radius: 100px;
+          border: none; cursor: pointer; position: relative; flex-shrink: 0;
+          transition: background 0.2s;
+        }
+        .cfg-pill-thumb {
+          position: absolute; width: 20px; height: 20px;
+          border-radius: 50%; background: white; top: 3px;
+          transition: left 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .cfg-temp-val { font-size: 18px; font-weight: 700; color: ${BRAND}; }
+        .cfg-temp-sub { font-size: 12px; color: ${MUTED}; margin-left: 4px; }
+        input[type="range"] { width: 100%; accent-color: ${BRAND}; margin-top: 8px; display: block; }
+        .lyr-modal-save {
+          width: 100%; background: ${BRAND}; color: white;
+          border: none; border-radius: 11px; padding: 13px;
+          font-family: inherit; font-size: 15px; font-weight: 700;
+          cursor: pointer; margin-top: 20px;
+          transition: background 0.15s;
+          box-shadow: 0 4px 12px rgba(217,107,107,0.28);
+        }
+        .lyr-modal-save:hover { background: #C85F5F; }
+
+        .lyr-error { color: #D96B6B; font-size: 13px; margin-top: 8px; }
+      `}</style>
+
+      {showAIConfig && (
+        <div className="lyr-overlay" onClick={() => setShowAIConfig(false)}>
+          <div className="lyr-modal" onClick={e => e.stopPropagation()}>
+            <div className="lyr-modal-header">
+              <span className="lyr-modal-title">AI Configuration</span>
+              <button className="lyr-modal-close" onClick={() => setShowAIConfig(false)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="cfg-grid">
+              <div>
+                <span className="cfg-lbl">Model</span>
+                <select className="cfg-sel" value={aiConfig.model} onChange={e => setAiConfig({ ...aiConfig, model: e.target.value })}>
+                  <option value="gemini-pro">Gemini Pro</option>
+                  <option value="gemini-ultra">Gemini Ultra</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="claude-sonnet">Claude Sonnet</option>
+                </select>
+              </div>
+              <div>
+                <span className="cfg-lbl">Difficulty</span>
+                <select className="cfg-sel" value={aiConfig.difficulty} onChange={e => setAiConfig({ ...aiConfig, difficulty: e.target.value })}>
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                  <option value="mixed">Mixed</option>
+                </select>
+              </div>
+              <div>
+                <span className="cfg-lbl">Questions</span>
+                <input type="number" className="cfg-num" min="1" max="30"
+                  value={aiConfig.questionCount}
+                  onChange={e => setAiConfig({ ...aiConfig, questionCount: parseInt(e.target.value) })} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <span className="cfg-lbl">Multiple Choice</span>
+                <div className="cfg-toggle-row">
+                  <span className="cfg-toggle-text">{aiConfig.includeMultipleChoice ? 'On' : 'Off'}</span>
+                  <button className="cfg-pill"
+                    style={{ background: aiConfig.includeMultipleChoice ? BRAND : '#DDDFE8' }}
+                    onClick={() => setAiConfig({ ...aiConfig, includeMultipleChoice: !aiConfig.includeMultipleChoice })}>
+                    <span className="cfg-pill-thumb" style={{ left: aiConfig.includeMultipleChoice ? 21 : 3 }} />
+                  </button>
+                </div>
+              </div>
+              <div className="cfg-span2">
+                <span className="cfg-lbl">
+                  Creativity — <span className="cfg-temp-val">{aiConfig.temperature.toFixed(1)}</span>
+                  <span className="cfg-temp-sub">{aiConfig.temperature < 0.4 ? 'Precise' : aiConfig.temperature < 0.7 ? 'Balanced' : 'Creative'}</span>
+                </span>
+                <input type="range" min="0" max="1" step="0.1" value={aiConfig.temperature}
+                  onChange={e => setAiConfig({ ...aiConfig, temperature: parseFloat(e.target.value) })} />
+              </div>
+            </div>
+            <button className="lyr-modal-save" onClick={() => setShowAIConfig(false)}>Save Settings</button>
           </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={handleFileChange}
-          />
+      <nav className="lyr-nav">
+        <span className="lyr-nav-name">New Assignment</span>
+        <div className="lyr-nav-spacer" />
+      </nav>
 
-          {pendingFiles.length === 0 && (
-            <p className="text-gray-400 italic text-sm">No files added yet. They will be attached when you confirm.</p>
-          )}
+      <div className="lyr-main">
+        <div className="lyr-content">
+          <div className="lyr-section">
+            <div className="lyr-label-row">
+              <label className="lyr-label">Assignment Title</label>
+            </div>
+            <input type="text" className="lyr-input lyr-input-title" value={title}
+              onChange={e => setTitle(e.target.value)} placeholder="Untitled Assignment" />
+          </div>
 
-          {pendingFiles.length > 0 && (
-            <div className="space-y-2">
-              {pendingFiles.map((file, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-gray-600 text-sm">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    className="w-5 h-5 shrink-0"
-                  >
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" />
-                    <path d="M14 2v6h6" />
-                  </svg>
-                  <span className="truncate">{file.name}</span>
-                  <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                </div>
-              ))}
+          <div className="lyr-section">
+            <div className="lyr-label-row">
+              <label className="lyr-label">Description</label>
             </div>
           )}
 
-          {uploadError && <p className="text-sm" style={{ color: '#ba3638' }}>{uploadError}</p>}
-        </div>
-
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              AI Instructions
-            </h2>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-gray-600">
-                  Questions to generate
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={questionCount}
-                  onChange={(e) => {
-                    const n = parseInt(e.target.value || '1', 10);
-                    setQuestionCount(Number.isNaN(n) ? 1 : Math.max(1, Math.min(n, 30)));
-                  }}
-                  className="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md text-center focus:outline-none focus:ring-1 focus:ring-gray-500"
-                />
+          <div className="lyr-section">
+            <div className="lyr-label-row">
+              <label className="lyr-label">Attachments</label>
+            </div>
+            <div className={`lyr-drop${isDragging ? ' dragging' : ''}`}
+              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}>
+              <div className="lyr-upload-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BRAND} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
               </div>
               <label className="flex items-center gap-2 text-xs font-medium text-gray-600 cursor-pointer">
                 <input
@@ -292,6 +383,33 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
                 Include &quot;select all that apply&quot; questions
               </label>
             </div>
+            {isUploading && (
+              <p style={{ color: MUTED, fontSize: 13, marginTop: 8 }}>Uploading...</p>
+            )}
+            {uploadError && (
+              <p className="lyr-error">{uploadError}</p>
+            )}
+            {files.length > 0 && (
+              <div className="lyr-files">
+                {files.map((file, idx) => (
+                  <div key={idx} className="lyr-file">
+                    <div className="lyr-file-icon">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                    </div>
+                    <span className="lyr-file-name">{file.name}</span>
+                    <span className="lyr-file-size">{file.size}</span>
+                    <button className="lyr-file-rm" onClick={e => { e.stopPropagation(); removeFile(idx); }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <textarea
             value={instructions}
@@ -309,19 +427,16 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
           </button>
         </div>
 
-      </div>
-      )}
-
-      {showReview && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Review Generated Questions
-              </h2>
-              <p className="text-sm text-gray-500">
-                Edit the suggested directions and questions before confirming.
-              </p>
+          <div className="lyr-section">
+            <div className="lyr-label-row">
+              <label className="lyr-label">AI Configuration</label>
+              <button className="lyr-ai-btn" onClick={() => setShowAIConfig(true)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                Edit
+              </button>
             </div>
             <button
               type="button"
@@ -332,27 +447,13 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
             </button>
           </div>
 
-          <textarea
-            value={result}
-            onChange={(e) => setResult(e.target.value)}
-            className="w-full min-h-[320px] rounded-2xl border border-gray-200 p-4 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
-          />
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-5 py-2.5 rounded-full border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowConfirmModal(true)}
-              className="px-6 py-2.5 rounded-full bg-gray-900 text-white text-sm font-medium hover:bg-gray-800"
-            >
-              Confirm Questions
-            </button>
+          <div className="lyr-section">
+            <div className="lyr-label-row">
+              <label className="lyr-label">Special Request</label>
+            </div>
+            <textarea className="lyr-textarea lyr-textarea-sm" value={specialRequest}
+              onChange={e => setSpecialRequest(e.target.value)}
+              placeholder="Any extra instructions? e.g. 'Focus on chapter 3', 'Add a word problem'..." />
           </div>
         </div>
       )}
@@ -383,9 +484,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
-};
-
-export default AssignmentEditor;
+}

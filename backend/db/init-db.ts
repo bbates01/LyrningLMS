@@ -17,6 +17,25 @@ if (!fs.existsSync(dbDir)) {
 const db = new Database(dbPath);
 db.pragma('foreign_keys = ON');
 
+const tables = [
+  'student_metrics',
+  'student_grades',
+  'assignment_documents',
+  'student_classes',
+  'assignments',
+  'classes',
+  'subjects',
+  'teachers',
+  'students',
+];
+
+console.log('Dropping existing tables (if any)...');
+db.pragma('foreign_keys = OFF');
+for (const table of tables) {
+  db.exec(`DROP TABLE IF EXISTS ${table}`);
+}
+db.pragma('foreign_keys = ON');
+
 const schemaPath = path.join(process.cwd(), 'backend', 'db', 'schema.sql');
 const seedPath = path.join(process.cwd(), 'backend', 'db', 'seed.sql');
 

@@ -56,6 +56,7 @@ export interface Assignment {
   content?: string;
   aiInstructions?: string;
   materials?: string[];
+  assignmentLink?: string;
 }
 
 export interface MetricData {
