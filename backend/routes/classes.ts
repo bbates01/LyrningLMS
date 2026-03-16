@@ -329,12 +329,7 @@ router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) 
       assignmentId = assignment.assignment_id;
     }
 
-    await query(
-      `INSERT INTO assignment_documents (assignment_id, filename, mime_type, pdf_blob)
-       VALUES ($1, $2, $3, $4)`,
-      [assignmentId, req.file.originalname ?? null, req.file.mimetype, req.file.buffer]
-    );
-
+    // PDFs are processed immediately and not stored permanently.
     return res.status(201).json({ success: true, assignmentId });
   } catch (err) {
     console.error('Error uploading assignment PDF:', err);
@@ -445,37 +440,11 @@ router.post('/:classId/assignments/:assignmentId/questions', async (req, res) =>
   }
 });
 
-// GET /api/classes/assignments/:assignmentId/pdf — download the stored assignment PDF
-router.get('/assignments/:assignmentId/pdf', async (req, res) => {
-  try {
-    const { assignmentId } = req.params;
-    const result = await query(
-      `SELECT d.pdf_blob, d.mime_type, d.filename
-       FROM assignment_documents d
-       WHERE d.assignment_id = $1`,
-      [assignmentId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'PDF not found' });
-    }
-
-    const row = result.rows[0] as {
-      pdf_blob: Buffer;
-      mime_type: string;
-      filename?: string | null;
-    };
-
-    res.setHeader('Content-Type', row.mime_type || 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename="${(row.filename || `assignment-${assignmentId}.pdf`).replace(/"/g, '')}"`
-    );
-    return res.send(row.pdf_blob);
-  } catch (err) {
-    console.error('Error downloading assignment PDF:', err);
-    res.status(500).json({ error: 'Failed to download PDF' });
-  }
+// GET /api/classes/assignments/:assignmentId/pdf — no longer supported (PDFs not stored)
+router.get('/assignments/:assignmentId/pdf', async (_req, res) => {
+  return res
+    .status(404)
+    .json({ error: 'PDF download is not supported; files are not stored permanently.' });
 });
 
 export default router;

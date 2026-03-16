@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-1. **Node.js** (v18+)
-2. No separate database server — the app uses **SQLite** (a single file in `backend/db/`).
+1. **Node.js** (v20.x recommended; repo includes `.nvmrc`)
+2. A **Postgres database** — in production you’ll use Neon (via `DATABASE_URL`); for local dev you can use the same Neon DB or any Postgres instance.
 
 ## Installation
 
@@ -13,29 +13,32 @@ Install all dependencies:
 npm install
 ```
 
-## Database Setup
+## Database Setup (Postgres)
 
-Initialize the SQLite database (creates tables and seed data):
+Initialize the Postgres database (creates tables and seed data):
 
 ```bash
 npm run db:init
 ```
 
-This creates (or resets) `backend/db/lyrning.sqlite`. Run it again anytime to reset the DB to a fresh seeded state.
+This uses the `DATABASE_URL` Postgres connection string and runs the Postgres schema/seed. If you set `RESET_DB=true` in your env, it will drop and recreate the schema first.
 
 ## Environment Variables
 
 Copy `.env.example` to `.env` and adjust if needed:
 
-```
-SQLITE_DB_PATH=./backend/db/lyrning.sqlite
+```env
+DATABASE_URL=postgresql://neondb_owner:your_password_here@your_host_here/neondb?sslmode=require
 PORT=3001
-VITE_API_URL=http://localhost:3001
 NODE_ENV=development
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+# Optional: set to true once to drop & reseed Postgres
+RESET_DB=false
 ```
 
-- `SQLITE_DB_PATH` — path to the SQLite file (default: `./backend/db/lyrning.sqlite`).
-- `PORT` — backend port (frontend uses `VITE_API_URL` for API calls).
+- `DATABASE_URL` — Postgres connection string (Neon in production).
+- `PORT` — backend port (frontend calls `/api/...` on the same origin in production).
 
 ## Running the Application
 
@@ -74,11 +77,12 @@ After seeding, you can log in with (password for all: **password123**):
 ```
 ├── backend/
 │   ├── db/
-│   │   ├── connection.ts     # SQLite connection and query helper
-│   │   ├── schema.sql        # Database schema (SQLite)
-│   │   ├── seed.sql          # Test data
-│   │   ├── init-db.ts        # Script to create/reset DB (npm run db:init)
-│   │   └── lyrning.sqlite    # SQLite database file (created by db:init)
+│   │   ├── connection.ts     # Postgres connection and query helper (pg Pool)
+│   │   ├── schema.pg.sql     # Database schema (Postgres)
+│   │   ├── seed.pg.sql       # Test data for Postgres
+│   │   ├── schema.sql        # Legacy SQLite schema (no longer used in production)
+│   │   ├── seed.sql          # Legacy SQLite seed (no longer used in production)
+│   │   └── init-db.ts        # Script to create/reset Postgres schema (npm run db:init)
 │   ├── routes/
 │   ├── types.ts
 │   ├── server.ts

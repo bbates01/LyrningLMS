@@ -1,34 +1,23 @@
-import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
-import path from 'path';
+import { Pool } from 'pg';
 
 dotenv.config();
 
-const dbPath =
-  process.env.SQLITE_DB_PATH ||
-  path.join(process.cwd(), 'backend', 'db', 'lyrning.sqlite');
+const connectionString = process.env.DATABASE_URL;
 
-const db = new Database(dbPath);
-db.pragma('foreign_keys = ON');
-
-/** Convert Postgres-style $1, $2 placeholders to SQLite ? and return ordered param list */
-function toSqliteParams(text: string, params?: any[]): [string, any[]] {
-  if (!params || params.length === 0) return [text, []];
-  const sql = text.replace(/\$(\d+)/g, '?');
-  return [sql, params];
+if (!connectionString) {
+  throw new Error('DATABASE_URL is required to connect to Postgres');
 }
 
-export function query(text: string, params?: any[]): Promise<{ rows: any[] }> {
-  const [sql, bound] = toSqliteParams(text, params);
-  const stmt = db.prepare(sql);
-  // better-sqlite3 exposes whether a statement returns rows via stmt.reader
-  if (stmt.reader) {
-    const rows = stmt.all(...bound);
-    return Promise.resolve({ rows });
-  }
+const pool = new Pool({
+  connectionString,
+  // Neon requires SSL; connection string usually has sslmode=require, but this is safe.
+  ssl: { rejectUnauthorized: false },
+});
 
-  stmt.run(...bound);
-  return Promise.resolve({ rows: [] });
+export async function query(text: string, params?: any[]): Promise<{ rows: any[] }> {
+  const res = await pool.query(text, params);
+  return { rows: res.rows };
 }
 
-export default db;
+export default { query };

@@ -1,69 +1,59 @@
-import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { Pool } from 'pg';
 
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
-const dbPath =
-  process.env.SQLITE_DB_PATH ||
-  path.join(process.cwd(), 'backend', 'db', 'lyrning.sqlite');
+const connectionString = process.env.DATABASE_URL;
 
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+if (!connectionString) {
+  throw new Error('DATABASE_URL is required to initialize Postgres');
 }
 
-const db = new Database(dbPath);
-db.pragma('foreign_keys = ON');
+const pool = new Pool({
+  connectionString,
+  ssl: { rejectUnauthorized: false },
+});
 
-const schemaPath = path.join(process.cwd(), 'backend', 'db', 'schema.sql');
-const seedPath = path.join(process.cwd(), 'backend', 'db', 'seed.sql');
+async function tableExists(table: string): Promise<boolean> {
+  const res = await pool.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1 LIMIT 1`,
+    [table],
+  );
+  return res.rowCount > 0;
+}
 
-const shouldReset = process.env.RESET_SQLITE_DB === '1' || process.env.RESET_SQLITE_DB === 'true';
-const hasStudentsTable =
-  db
-    .prepare(
-      `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`
-    )
-    .get('students') != null;
+async function main() {
+  const reset = process.env.RESET_DB === 'true' || process.env.RESET_DB === '1';
 
-if (hasStudentsTable && !shouldReset) {
-  console.log('SQLite database already initialized at', dbPath);
-  db.close();
+  const hasStudents = await tableExists('students');
+  if (hasStudents && !reset) {
+    console.log('Postgres DB already initialized');
+    process.exit(0);
+  }
+
+  if (reset) {
+    console.log('RESET_DB enabled: dropping public schema');
+    await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+  }
+
+  const schemaPath = path.join(process.cwd(), 'backend', 'db', 'schema.pg.sql');
+  const seedPath = path.join(process.cwd(), 'backend', 'db', 'seed.pg.sql');
+
+  console.log('Running Postgres schema...');
+  const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
+  await pool.query(schemaSql);
+
+  console.log('Running Postgres seed...');
+  const seedSql = fs.readFileSync(seedPath, 'utf-8');
+  await pool.query(seedSql);
+
+  console.log('Postgres database initialized');
   process.exit(0);
 }
 
-if (shouldReset) {
-  const tables = [
-    'assignment_question_options',
-    'assignment_questions',
-    'assignment_documents',
-    'student_metrics',
-    'student_grades',
-    'student_classes',
-    'assignments',
-    'classes',
-    'subjects',
-    'teachers',
-    'students',
-  ];
-
-  console.log('RESET_SQLITE_DB enabled: dropping existing tables (if any)...');
-  db.pragma('foreign_keys = OFF');
-  for (const table of tables) {
-    db.exec(`DROP TABLE IF EXISTS ${table}`);
-  }
-  db.pragma('foreign_keys = ON');
-}
-
-console.log('Running schema...');
-const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
-db.exec(schemaSql);
-
-console.log('Running seed...');
-const seedSql = fs.readFileSync(seedPath, 'utf-8');
-db.exec(seedSql);
-
-db.close();
-console.log('Database initialized at', dbPath);
+main().catch((err) => {
+  console.error('DB init error', err);
+  process.exit(1);
+});

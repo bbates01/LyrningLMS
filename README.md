@@ -22,12 +22,12 @@ Organized by layer:
 |-------|--------------|
 | **Frontend** | React, TypeScript, Vite (build and dev server), component-based UI |
 | **Backend** | Node.js, Express.js (REST API) |
-| **Data** | SQLite (relational database, single file) |
+| **Data** | Postgres (Neon in production) |
 | **External** | Groq API (AI learning assistance) |
 
 - **Frontend:** React with TypeScript; Vite for fast builds and HMR.
 - **Backend:** Node.js and Express for auth, classes, assignments, and enrollment.
-- **Database:** SQLite with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
+- **Database:** Postgres with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
 - **APIs:** REST for the app; Groq for in-assignment AI tutoring.
 
 ---
@@ -54,14 +54,14 @@ Organized by layer:
      │ SQL                                                    │ HTTPS
      ▼                                                        ▼
 ┌──────────────────┐                          ┌──────────────────────┐
-│   SQLite         │                          │  Groq API            │
-│   (lyrning.sqlite) │                         │  (AI tutor)          │
+│   Postgres       │                          │  Groq API            │
+│   (Neon / local) │                          │  (AI tutor)          │
 └──────────────────┘                          └──────────────────────┘
 ```
 
 - **Browser:** Teachers and students use the same app; role is determined at login.
 - **Frontend:** SPA that calls the backend for auth, class list, enrollment, and assignments.
-- **Backend:** Serves REST endpoints; talks to SQLite and (for AI) to Groq.
+- **Backend:** Serves REST endpoints; talks to Postgres and (for AI) to Groq.
 - **Database:** Holds users, classes, enrollments, assignments, and grades. **Class codes** (see below) allow students to join classes without exposing primary keys.
 
 ---
@@ -81,9 +81,8 @@ The database uses a **`class_code`** (e.g. `R7T4W9YZ`) on each class in addition
   - Verify with: `node --version` (should show something like `v20.x.x`).
 - **npm** (included with Node)  
   `npm --version`
+- **Postgres database** — in production we use **Neon** via `DATABASE_URL`; locally you can use the same Neon DB or any Postgres instance.
 - **Groq API key** (optional; **not required** for testing the vertical slice) — [console.groq.com](https://console.groq.com)
-
-No separate database server is required; the app uses **SQLite** (single file).
 
 ---
 
@@ -105,20 +104,22 @@ npm install
 Create a `.env` in the project root (or copy from `.env.example`):
 
 ```env
-SQLITE_DB_PATH=./backend/db/lyrning.sqlite
+DATABASE_URL=postgresql://neondb_owner:your_password_here@your_host_here/neondb?sslmode=require
 PORT=3001
-VITE_API_URL=http://localhost:3001
 NODE_ENV=development
 GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+# Optional: set to true once to drop & reseed Postgres
+RESET_DB=false
 ```
 
-- `SQLITE_DB_PATH` is the path to the SQLite database file (default: `./backend/db/lyrning.sqlite`).
-- `PORT` is the backend port. Set `VITE_API_URL` to the same base URL (e.g. `http://localhost:3001`) so the frontend can reach the API.
+- `DATABASE_URL` is the Postgres connection string (Neon in production).
+- `PORT` is the backend port. In production the frontend calls `/api/...` on the same origin.
 - `GROQ_API_KEY` is used by the backend for the AI tutor and assignment question generation. Get a key at [console.groq.com](https://console.groq.com). Not required for testing the vertical slice (e.g. add a student to a class by class code).
 
 ### 3. Database
 
-Initialize the SQLite database (creates tables and seed data):
+Initialize the Postgres database (creates tables and seed data):
 
 ```bash
 npm run db:init
@@ -176,9 +177,7 @@ Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (
 - **Login:** Choose Student or Teacher, enter a username and `password123`. You should land on the class list (students: “My Classes”; teachers: “Classes I Teach”).
 - **Class home:** Click a class. You should see that class’s name in the header and a roadmap/assignments list. Teachers also see **Home** and **Info** subtabs.
 - **Teacher Info:** In a class, open the **Info** subtab. You should see class name, subject, description, **class code**, period, semester, and room.
-- **Database:** With the app running, you can confirm enrollment in SQLite, e.g.  
-  `sqlite3 backend/db/lyrning.sqlite "SELECT username, class_id FROM student_classes sc JOIN students s ON s.student_id = sc.student_id WHERE s.username = 'emma_w';"`  
-  After the enrollment steps above, Emma should have an extra row for the Biology class.
+- **Database:** With the app running, you can confirm enrollment in Postgres using any SQL client connected via `DATABASE_URL`. After the enrollment steps above, Emma should have an extra row for the Biology class in `student_classes`.
 
 ---
 
@@ -186,7 +185,7 @@ Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (
 
 - **`frontend/`** — React app (components, services, types).
 - **`backend/`** — Express server and routes (`auth`, `classes`), DB connection and queries.
-- **`backend/db/`** — `schema.sql`, `seed.sql`, optional migration scripts.
+- **`backend/db/`** — Postgres connection and schema/seed files (see `connection.ts`, `schema.pg.sql`, `seed.pg.sql`, `init-db.ts`).
 
 A new teammate can run the project by: installing Node, copying `.env`, running `npm run db:init`, and running `npm run dev`, then following the verification steps above.
 
