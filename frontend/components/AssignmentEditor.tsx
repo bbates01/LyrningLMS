@@ -357,6 +357,7 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
             <div className="lyr-label-row">
               <label className="lyr-label">Description</label>
             </div>
+          </div>
 
           <div className="lyr-section">
             <div className="lyr-label-row">
@@ -426,8 +427,6 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
           >
             {isGenerating ? 'Generating…' : 'Generate with AI'}
           </button>
-        </div>
-
           <div className="lyr-section">
             <div className="lyr-label-row">
               <label className="lyr-label">AI Configuration</label>
@@ -457,6 +456,7 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
               placeholder="Any extra instructions? e.g. 'Focus on chapter 3', 'Add a word problem'..." />
           </div>
         </div>
+      </div>
 
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !isSaving && setShowConfirmModal(false)}>
@@ -484,7 +484,7 @@ export default function AssignmentEditor({ classId, teacherId }: Props) {
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -353,22 +353,8 @@ router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) 
       assignmentId = assignment.assignment_id;
     }
 
-<<<<<<< HEAD
     // PDFs are processed immediately and not stored permanently.
     return res.status(201).json({ success: true, assignmentId });
-=======
-    await query(
-      `INSERT INTO assignment_documents (assignment_id, filename, mime_type, pdf_blob)
-       VALUES ($1, $2, $3, $4)`,
-      [assignmentId, req.file.originalname ?? null, req.file.mimetype, req.file.buffer]
-    );
-
-    return res.status(201).json({
-      success: true,
-      assignmentId: assignment.assignment_id,
-      assignmentLink: assignment.assignment_link,
-    });
->>>>>>> 8dbd0e19b3dc829c0023e44c7c82316412f7f426
   } catch (err) {
     console.error('Error uploading assignment PDF:', err);
     res.status(500).json({ success: false, error: 'Failed to upload assignment PDF' });
@@ -395,6 +381,9 @@ router.get('/assignments/link/:link', async (req, res) => {
   } catch (err) {
     console.error('Error fetching assignment by link:', err);
     res.status(500).json({ error: 'Failed to fetch assignment' });
+  }
+});
+
 // POST /api/classes/:classId/assignments/:assignmentId/questions — save questions and options for an assignment
 router.post('/:classId/assignments/:assignmentId/questions', async (req, res) => {
   try {
