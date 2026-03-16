@@ -13,6 +13,7 @@
     "dev:frontend": "cd frontend && vite",
     "build": "cd frontend && vite build",
     "preview": "cd frontend && vite preview",
+    "start": "node --import tsx backend/server.ts",
     "db:init": "tsx backend/db/init-db.ts"
   },
   "dependencies": {
