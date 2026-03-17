@@ -48,6 +48,16 @@ async function main() {
         await pool.query('ALTER TABLE assignments ADD COLUMN assignment_link TEXT;');
         await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_assignments_assignment_link ON assignments(assignment_link);');
       }
+      const hasAiParams = await columnExists('assignments', 'ai_params');
+      if (!hasAiParams) {
+        console.log('Migrating: adding assignments.ai_params');
+        await pool.query('ALTER TABLE assignments ADD COLUMN ai_params TEXT;');
+      }
+      const hasQuestionTypes = await columnExists('assignments', 'question_types');
+      if (!hasQuestionTypes) {
+        console.log('Migrating: adding assignments.question_types');
+        await pool.query('ALTER TABLE assignments ADD COLUMN question_types TEXT;');
+      }
     }
 
     console.log('Postgres DB already initialized');

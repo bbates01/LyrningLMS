@@ -1,7 +1,10 @@
 import express from 'express';
+import multer from 'multer';
 import OpenAI from 'openai';
+import { PDFParse } from 'pdf-parse';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 const groq = process.env.GROQ_API_KEY
   ? new OpenAI({
@@ -60,7 +63,40 @@ Teacher's specific restrictions: ${instructions || "Don't give the student the f
   }
 });
 
-/** POST /api/ai/generate-questions — assignment questions from topic, materials, instructions, count */
+/** POST /api/ai/extract-pdf-text — extract text from uploaded PDF(s); returns { texts: string[] } */
+router.post('/extract-pdf-text', upload.array('pdfs', 10), async (req: express.Request, res: express.Response) => {
+  try {
+    const files = (req as any).files as Express.Multer.File[] | undefined;
+    if (!files?.length) {
+      return res.status(400).json({ success: false, error: 'At least one PDF file is required (field: pdfs)' });
+    }
+    const texts: string[] = [];
+    for (const file of files) {
+      if (!file.buffer?.length || file.mimetype !== 'application/pdf') {
+        texts.push('');
+        continue;
+      }
+      try {
+        const parser = new PDFParse({ data: file.buffer });
+        const result = await parser.getText();
+        await parser.destroy();
+        const text = (result?.text ?? '').trim();
+        texts.push(text || `[No text extracted from ${file.originalname}]`);
+      } catch (err) {
+        console.error('PDF extract error for', file.originalname, err);
+        texts.push(`[Error extracting text from ${file.originalname}]`);
+      }
+    }
+    return res.json({ success: true, texts });
+  } catch (err) {
+    console.error('extract-pdf-text error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to extract text from PDFs' });
+  }
+});
+
+const QUESTION_TYPES = ['multiple_choice', 'true_false', 'short_answer', 'select_all_that_apply'] as const;
+
+/** POST /api/ai/generate-questions — assignment questions from topic, materials, instructions, count, questionTypes, generationCommands */
 router.post('/generate-questions', async (req: express.Request, res: express.Response) => {
   if (!groq) {
     return res.status(503).json({
@@ -70,52 +106,81 @@ router.post('/generate-questions', async (req: express.Request, res: express.Res
   }
 
   try {
-    const { topic, materials = [], teacherInstructions = '', questionCount = 7, includeSelectAllThatApply = false } = req.body as {
+    const {
+      topic,
+      materials = [],
+      teacherInstructions = '',
+      questionCount = 7,
+      questionTypes: requestedTypes = ['multiple_choice'],
+      generationCommands = '',
+    } = req.body as {
       topic?: string;
       materials?: string[];
       teacherInstructions?: string;
       questionCount?: number;
-      includeSelectAllThatApply?: boolean;
+      questionTypes?: string[];
+      generationCommands?: string;
     };
 
     const safeCount = Math.max(1, Math.min(Number(questionCount) || 1, 30));
-    const wantSelectAll = Boolean(includeSelectAllThatApply);
+    const types: string[] = Array.isArray(requestedTypes)
+      ? requestedTypes.filter((t) => typeof t === 'string' && QUESTION_TYPES.includes(t as typeof QUESTION_TYPES[number]))
+      : ['multiple_choice'];
+    if (types.length === 0) types.push('multiple_choice');
 
     const tutorBehavior = `You are an AI tutor integrated into a learning management system generating assignment questions.
 
 Assignment question rules:
-- Every question MUST include answers: one correct answer and incorrect options (distractors) where appropriate. For multiple-choice or select-all-that-apply, include the correct option(s) and wrong options. If the teacher asks for multiple correct answers, provide them. Do not output questions without answer options or without the correct answer indicated.
-- Do NOT use the names of uploaded materials (e.g. file names, document titles) in the question text. Reference the content or concepts only; phrase questions so they stand on their own without mentioning PDF or handout names.`;
+- Every question MUST include answers: one correct answer and incorrect options (distractors) where appropriate, except for short_answer which may have a single correct answer text only.
+- Do NOT use the names of uploaded materials in the question text. Reference the content or concepts only.
+- You MUST generate ONLY the following question type(s): ${types.join(', ')}. Do not add any other types.`;
+
+    const typeRules = [
+      types.includes('multiple_choice') &&
+        'multiple_choice: one "correctAnswer" and "falseAnswers" array; questionType "multiple_choice".',
+      types.includes('true_false') &&
+        'true_false: questionType "true_false"; correctAnswer "True" or "False"; falseAnswers the other.',
+      types.includes('short_answer') &&
+        'short_answer: questionType "short_answer"; correctAnswer the expected answer; falseAnswers can be empty array.',
+      types.includes('select_all_that_apply') &&
+        'select_all_that_apply: questionType "select_all_that_apply"; "correctAnswers" array (2+); include falseAnswers.',
+    ]
+      .filter(Boolean)
+      .join('\n- ');
 
     const userContent = `${tutorBehavior}
 
 Teacher instructions / constraints:
 ${teacherInstructions || 'No extra instructions provided.'}
+${generationCommands ? `\nQuestion generation commands (follow these): ${generationCommands}` : ''}
 
 Topic: "${topic || 'General course content'}"
-Reference materials (use content only; do not mention these filenames in questions): ${Array.isArray(materials) && materials.length ? materials.join(', ') : 'None; rely on general textbook knowledge.'}
 
-Task:
-- Propose exactly ${safeCount} assessment questions for this assignment.
-- Mix of conceptual understanding and application. Prefer multiple-choice with one correct answer and multiple false answers. ${wantSelectAll ? 'Include some "select all that apply" questions (use questionType "select_all_that_apply" and "correctAnswers" array with 2+ correct options); use the rest as multiple_choice.' : 'If the teacher requests "select all that apply" in instructions, use questionType "select_all_that_apply" and "correctAnswers" for those questions; otherwise use "multiple_choice" with a single "correctAnswer".'}
+Uploaded document content below. Use this content to generate accurate questions. Do not mention filenames or "document" in the question text.
+${Array.isArray(materials) && materials.length
+  ? materials
+      .map((t, i) => `--- Document ${i + 1} ---\n${typeof t === 'string' ? t.slice(0, 80000) : ''}`)
+      .join('\n\n')
+  : 'No document content provided.'}
 
-Output format: Return ONLY valid JSON (no markdown, no code fence, no extra text). Use this exact structure:
+Task: Propose exactly ${safeCount} questions. Only use these types: ${types.join(', ')}.
+- ${typeRules}
+
+Output format: Return ONLY valid JSON (no markdown, no code fence). Structure:
 {
   "directions": "<short directions for students>",
   "questions": [
     {
       "questionNumber": 1,
       "question": "<question text>",
-      "questionType": "multiple_choice" or "select_all_that_apply",
-      "correctAnswer": "<single correct answer text>",
-      "correctAnswers": ["<correct 1>", "<correct 2>", ...],
-      "falseAnswers": ["<false answer 1>", "<false answer 2>", ...]
+      "questionType": "multiple_choice" | "true_false" | "short_answer" | "select_all_that_apply",
+      "correctAnswer": "<single correct answer>",
+      "correctAnswers": ["<correct 1>", "<correct 2>"],
+      "falseAnswers": ["<wrong option 1>", ...]
     }
   ]
 }
-- For multiple_choice: set "correctAnswer" and leave "correctAnswers" empty or omit it. Include at least one falseAnswer.
-- For select_all_that_apply: set "correctAnswers" (array of 2+ correct option texts) and omit or leave "correctAnswer" empty. Include at least one falseAnswer.
-Include exactly ${safeCount} items in the "questions" array.`;
+Include exactly ${safeCount} items in "questions".`;
 
     const completion = await groq.chat.completions.create({
       model: GROQ_MODEL,
@@ -133,6 +198,7 @@ Include exactly ${safeCount} items in the "questions" array.`;
       } else {
         data.questions = data.questions.map((q) => ({
           ...q,
+          questionType: types.includes(q.questionType ?? '') ? q.questionType : types[0],
           falseAnswers: Array.isArray(q.falseAnswers) ? q.falseAnswers : [],
         }));
       }
@@ -149,6 +215,79 @@ Include exactly ${safeCount} items in the "questions" array.`;
     return res.status(500).json({
       success: false,
       error: 'Error generating questions.',
+    });
+  }
+});
+
+/** POST /api/ai/batch-update-questions — apply a teacher command to update all questions, return new JSON + message */
+router.post('/batch-update-questions', async (req: express.Request, res: express.Response) => {
+  if (!groq) {
+    return res.status(503).json({
+      success: false,
+      error: 'Groq API is not configured. Set GROQ_API_KEY in .env.',
+    });
+  }
+
+  try {
+    const { currentQuestions, command } = req.body as {
+      currentQuestions?: { directions: string; questions: { questionNumber: number; question: string; questionType?: string; correctAnswer?: string; correctAnswers?: string[]; falseAnswers?: string[] }[] };
+      command?: string;
+    };
+
+    if (!currentQuestions || !Array.isArray(currentQuestions.questions) || !command || typeof command !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'currentQuestions (with directions and questions array) and command are required.',
+      });
+    }
+
+    const prompt = `You are helping a teacher edit assignment questions. They want to apply this change to ALL questions:
+
+"${command.trim()}"
+
+Current assignment (JSON):
+${JSON.stringify(currentQuestions, null, 2)}
+
+Task:
+1. Apply the teacher's request to the questions (and directions if relevant). Output the full updated JSON in the same structure: { "directions": "...", "questions": [ ... ] }.
+2. In a short sentence (one line), summarize what you changed (e.g. "I made the wording more complex and added one distractor per question."). Put that summary on a single line after the JSON.
+
+Return ONLY: first the complete JSON (valid, no markdown fence), then a blank line, then the one-line summary. No other text.`;
+
+    const completion = await groq.chat.completions.create({
+      model: GROQ_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const raw = completion.choices[0]?.message?.content?.trim() ?? '';
+    const jsonEnd = raw.indexOf('\n\n');
+    const jsonStr = (jsonEnd > 0 ? raw.slice(0, jsonEnd) : raw).replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const summary = jsonEnd > 0 ? raw.slice(jsonEnd).trim().split('\n')[0] : 'Questions updated.';
+
+    type Q = { questionNumber: number; question: string; questionType?: string; correctAnswer?: string; correctAnswers?: string[]; falseAnswers?: string[] };
+    let data: { directions: string; questions: Q[] };
+    try {
+      data = JSON.parse(jsonStr) as { directions?: string; questions?: Q[] };
+      if (!Array.isArray(data?.questions)) {
+        data = { directions: data?.directions ?? currentQuestions.directions, questions: [] };
+      } else {
+        data.questions = data.questions.map((q) => ({
+          ...q,
+          falseAnswers: Array.isArray(q.falseAnswers) ? q.falseAnswers : [],
+        }));
+      }
+    } catch {
+      return res.status(500).json({
+        success: false,
+        error: 'AI did not return valid JSON. Try again.',
+      });
+    }
+    return res.json({ success: true, data, message: summary });
+  } catch (err) {
+    console.error('Groq batch-update-questions error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Error updating questions.',
     });
   }
 });

@@ -5,6 +5,7 @@ import path from 'path';
 import authRoutes from './routes/auth.js';
 import classesRoutes from './routes/classes.js';
 import aiRoutes from './routes/ai.js';
+import { runMigrations } from './db/migrate.js';
 
 dotenv.config();
 
@@ -31,8 +32,15 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n✅ Backend server running: http://localhost:${PORT}`);
-});
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n✅ Backend server running: http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to run migrations:', err);
+    process.exit(1);
+  });
 
 export default app;

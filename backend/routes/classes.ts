@@ -114,7 +114,7 @@ router.get('/:classId/assignments', async (req, res) => {
   try {
     const { classId } = req.params;
     const result = await query(
-      `SELECT assignment_id, assignment_name, description, type, max_points, due_date, assignment_link
+      `SELECT assignment_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types
        FROM assignments
        WHERE class_id = $1
        ORDER BY due_date ASC NULLS LAST`,
@@ -209,6 +209,8 @@ router.post('/:classId/assignments', async (req, res) => {
       type,
       maxPoints,
       dueDate,
+      aiParams,
+      questionTypes,
     } = req.body as {
       teacherId?: number;
       assignmentName?: string;
@@ -216,6 +218,8 @@ router.post('/:classId/assignments', async (req, res) => {
       type?: string;
       maxPoints?: number;
       dueDate?: string;
+      aiParams?: string;
+      questionTypes?: string;
     };
 
     if (teacherId == null || !assignmentName) {
@@ -237,11 +241,13 @@ router.post('/:classId/assignments', async (req, res) => {
     }
 
     const assignmentLink = generateAssignmentLink();
+    const questionTypesStr =
+      typeof questionTypes === 'string' ? questionTypes : Array.isArray(questionTypes) ? (questionTypes as string[]).join(',') : null;
 
     const insertResult = await query(
-      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link`,
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types`,
       [
         classId,
         assignmentName,
@@ -250,6 +256,8 @@ router.post('/:classId/assignments', async (req, res) => {
         maxPoints ?? 100,
         dueDate ?? null,
         assignmentLink,
+        aiParams ?? null,
+        questionTypesStr ?? null,
       ]
     );
 
@@ -260,27 +268,27 @@ router.post('/:classId/assignments', async (req, res) => {
   }
 });
 
-// POST /api/classes/:classId/assignments/pdf — upload a PDF (creates assignment only if assignmentId not provided)
+// POST /api/classes/:classId/assignments/pdf — attach PDF to an existing assignment (assignmentId required). Does NOT create assignments.
 router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) => {
   try {
     const { classId } = req.params;
-    const { teacherId, assignmentName, description, type, maxPoints, dueDate, assignmentId: existingAssignmentId } = req.body as {
+    const { teacherId, assignmentId: existingAssignmentId } = req.body as {
       teacherId?: string | number;
-      assignmentName?: string;
-      description?: string;
-      type?: string;
-      maxPoints?: string | number;
-      dueDate?: string;
       assignmentId?: string | number;
     };
 
     const teacherIdNum = teacherId == null ? null : Number(teacherId);
-    const maxPointsNum = maxPoints == null ? null : Number(maxPoints);
-
     if (teacherIdNum == null || Number.isNaN(teacherIdNum)) {
       return res
         .status(400)
         .json({ success: false, error: 'teacherId is required' });
+    }
+
+    const aid = existingAssignmentId != null ? Number(existingAssignmentId) : NaN;
+    if (Number.isNaN(aid) || aid <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'assignmentId is required to attach a PDF' });
     }
 
     if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
@@ -301,60 +309,16 @@ router.post('/:classId/assignments/pdf', upload.single('pdf'), async (req, res) 
         .json({ success: false, error: 'You are not allowed to add assignments to this class' });
     }
 
-    const assignmentLink = generateAssignmentLink();
-
-    const created = await query(
-      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link`,
-      [
-        classId,
-        assignmentName,
-        description ?? null,
-        type ?? null,
-        maxPointsNum == null || Number.isNaN(maxPointsNum) ? 100 : maxPointsNum,
-        dueDate ?? null,
-        assignmentLink,
-      ]
+    const assignCheck = await query(
+      'SELECT assignment_id FROM assignments WHERE assignment_id = $1 AND class_id = $2',
+      [aid, classId]
     );
-    let assignmentId: number;
-
-    const aid = existingAssignmentId != null ? Number(existingAssignmentId) : NaN;
-    if (!Number.isNaN(aid) && aid > 0) {
-      const assignCheck = await query(
-        'SELECT assignment_id FROM assignments WHERE assignment_id = $1 AND class_id = $2',
-        [aid, classId]
-      );
-      if (assignCheck.rows.length === 0) {
-        return res.status(404).json({ success: false, error: 'Assignment not found' });
-      }
-      assignmentId = aid;
-    } else {
-      if (!assignmentName || typeof assignmentName !== 'string' || !assignmentName.trim()) {
-        return res.status(400).json({ success: false, error: 'assignmentName is required when not attaching to an existing assignment' });
-      }
-      const created = await query(
-        `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING assignment_id`,
-        [
-          classId,
-          assignmentName.trim(),
-          description ?? null,
-          type ?? null,
-          maxPointsNum == null || Number.isNaN(maxPointsNum) ? 100 : maxPointsNum,
-          dueDate ?? null,
-        ]
-      );
-      const assignment = created.rows[0] as { assignment_id: number };
-      if (!assignment?.assignment_id) {
-        return res.status(500).json({ success: false, error: 'Failed to create assignment' });
-      }
-      assignmentId = assignment.assignment_id;
+    if (assignCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Assignment not found' });
     }
 
-    // PDFs are processed immediately and not stored permanently.
-    return res.status(201).json({ success: true, assignmentId });
+    // PDF is accepted and processed (e.g. for AI); not stored permanently in this flow.
+    return res.status(201).json({ success: true, assignmentId: aid });
   } catch (err) {
     console.error('Error uploading assignment PDF:', err);
     res.status(500).json({ success: false, error: 'Failed to upload assignment PDF' });
@@ -412,7 +376,12 @@ router.post('/:classId/assignments/:assignmentId/questions', async (req, res) =>
       return res.status(404).json({ success: false, error: 'Assignment not found' });
     }
 
-    const questionTypeMap: Record<string, string> = { select_all_that_apply: 'select_all_that_apply', multiple_choice: 'multiple_choice' };
+    const questionTypeMap: Record<string, string> = {
+      select_all_that_apply: 'select_all_that_apply',
+      multiple_choice: 'multiple_choice',
+      true_false: 'true_false',
+      short_answer: 'short_answer',
+    };
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       const questionText = q?.questionText?.trim();

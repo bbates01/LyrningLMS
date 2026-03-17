@@ -5,6 +5,7 @@ import ClassSelect from './components/ClassSelect';
 import ClassInfo from './components/ClassInfo';
 import AssignmentView from './components/AssignmentView';
 import AssignmentEditor from './components/AssignmentEditor';
+import StudentLogin from './components/StudentLogin';
 import { ViewState, UserSession, Assignment, ClassSummary } from './types';
 import { BookOpen, Trash2 } from './components/Icons';
 import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, type AssignmentQuestionPreview } from './services/api';
@@ -62,10 +63,13 @@ function mapApiAssignmentToAssignment(row: {
   };
 }
 
-function CopyLinkButton({ link }: { link: string }) {
-  const [copied, setCopied] = useState(false);
+function studentLoginUrl(classId: number, assignmentId: string | number): string {
+  return `${window.location.origin}/student/login?class=${classId}&assignment=${assignmentId}`;
+}
 
-  const fullUrl = `${window.location.origin}/assignment/${link}`;
+function CopyStudentLinkButton({ classId, assignmentId }: { classId: number; assignmentId: string | number }) {
+  const [copied, setCopied] = useState(false);
+  const fullUrl = studentLoginUrl(classId, assignmentId);
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -90,11 +94,9 @@ function CopyLinkButton({ link }: { link: string }) {
       type="button"
       onClick={handleCopy}
       className={`ml-2 p-2 rounded-lg transition-colors shrink-0 ${
-        copied
-          ? 'text-green-500 bg-green-50'
-          : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+        copied ? 'text-green-500 bg-green-50' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
       }`}
-      title={copied ? 'Copied!' : `Copy assignment link`}
+      title={copied ? 'Copied!' : 'Copy student link'}
     >
       {copied ? (
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -119,6 +121,8 @@ const App: React.FC = () => {
   const [assignmentQuestions, setAssignmentQuestions] = useState<AssignmentQuestionPreview[]>([]);
   const [assignmentToDelete, setAssignmentToDelete] = useState<Assignment | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [createdClassId, setCreatedClassId] = useState<number | null>(null);
+  const [createdAssignmentId, setCreatedAssignmentId] = useState<number | null>(null);
   const isRestoringFromHistory = useRef(false);
 
   const refetchClassAssignments = useCallback(() => {
@@ -300,12 +304,12 @@ const App: React.FC = () => {
                         )}
                       </div>
                     </button>
-                    {a.assignmentLink && (
-                      <CopyLinkButton link={a.assignmentLink} />
+                    {selectedClass && (
+                      <CopyStudentLinkButton classId={selectedClass.class_id} assignmentId={a.id} />
                     )}
                     <button
                       type="button"
-                      onClick={() => handleDeleteAssignment(a.id)}
+                      onClick={() => handleDeleteAssignmentClick(a)}
                       className="ml-2 p-2 text-gray-300 hover:text-red-500 transition-colors shrink-0"
                       title="Delete assignment"
                     >
@@ -320,6 +324,10 @@ const App: React.FC = () => {
       })}
     </div>
   );
+
+  if (window.location.pathname === '/student/login') {
+    return <StudentLogin />;
+  }
 
   if (!session || view === 'LOGIN') {
     return <Login onLogin={handleLogin} />;
@@ -343,30 +351,55 @@ const App: React.FC = () => {
           <AssignmentEditor
             classId={selectedClass?.class_id ?? 0}
             teacherId={session.userId ?? 0}
-            onAssignmentCreated={() => setView('ASSIGNMENT_CREATE_SUCCESS')}
+            onAssignmentCreated={(classId, assignmentId) => {
+              setCreatedClassId(classId);
+              setCreatedAssignmentId(assignmentId);
+              setView('ASSIGNMENT_CREATE_SUCCESS');
+            }}
           />
         );
       case 'ASSIGNMENT_VIEW':
-        return selectedAssignment
+        return selectedAssignment && selectedClass
           ? (
             <AssignmentView
               assignment={selectedAssignment}
+              classId={selectedClass.class_id}
               onViewTeacherMode={() => setView('ASSIGNMENT_EDIT')}
               questionsPreview={assignmentQuestions}
             />
           )
           : null;
       case 'ASSIGNMENT_CREATE_SUCCESS':
-        return (
-          <div className="space-y-6 max-w-md">
+        return createdClassId != null && createdAssignmentId != null ? (
+          <div className="space-y-6 max-w-xl">
             <h2 className="text-2xl font-bold text-gray-900">Assignment created</h2>
-            <p className="text-gray-600">Your assignment has been saved. You can add more or go back to the list.</p>
+            <p className="text-gray-600">Share this link with students so they can open the assignment.</p>
+            <div className="flex flex-wrap items-center gap-2 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+              <code className="flex-1 min-w-0 break-all text-sm text-gray-800">
+                {studentLoginUrl(createdClassId, createdAssignmentId)}
+              </code>
+              <CopyStudentLinkButton classId={createdClassId} assignmentId={createdAssignmentId} />
+            </div>
             <button
               type="button"
               onClick={() => {
+                setCreatedClassId(null);
+                setCreatedAssignmentId(null);
                 refetchClassAssignments();
                 setView('ASSIGNMENT_LIST');
               }}
+              className="px-5 py-2.5 rounded-full bg-gray-900 text-white text-sm font-medium hover:bg-gray-800"
+            >
+              Back to assignments
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-6 max-w-md">
+            <h2 className="text-2xl font-bold text-gray-900">Assignment created</h2>
+            <p className="text-gray-600">Your assignment has been saved.</p>
+            <button
+              type="button"
+              onClick={() => { refetchClassAssignments(); setView('ASSIGNMENT_LIST'); }}
               className="px-5 py-2.5 rounded-full bg-gray-900 text-white text-sm font-medium hover:bg-gray-800"
             >
               Back to assignments

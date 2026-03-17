@@ -20,7 +20,19 @@ export async function fetchClassDetails(classId: number): Promise<any> {
   return res.json();
 }
 
-export async function fetchClassAssignments(classId: number): Promise<any[]> {
+export interface AssignmentRow {
+  assignment_id: number;
+  assignment_name: string;
+  description?: string | null;
+  type?: string | null;
+  max_points?: number;
+  due_date?: string | null;
+  assignment_link?: string | null;
+  ai_params?: string | null;
+  question_types?: string | null;
+}
+
+export async function fetchClassAssignments(classId: number): Promise<AssignmentRow[]> {
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments`);
   if (!res.ok) throw new Error('Failed to fetch assignments');
   return res.json();
@@ -37,19 +49,19 @@ export async function enrollStudentByClassCode(studentId: number, classCode: str
   return { success: true };
 }
 
-/** Upload a PDF. If assignmentId is provided, attach to that assignment; otherwise backend creates a new assignment (legacy). */
+/** Attach a PDF to an existing assignment. assignmentId is required (assignment must be created first). */
 export async function uploadAssignmentPdf(
   classId: number,
   teacherId: number,
   file: File,
   assignmentName: string,
-  assignmentId?: number
+  assignmentId: number
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
   const formData = new FormData();
   formData.append('pdf', file);
   formData.append('teacherId', String(teacherId));
   formData.append('assignmentName', assignmentName);
-  if (assignmentId != null) formData.append('assignmentId', String(assignmentId));
+  formData.append('assignmentId', String(assignmentId));
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments/pdf`, {
     method: 'POST',
     body: formData,
@@ -63,12 +75,20 @@ export async function createAssignment(
   classId: number,
   teacherId: number,
   assignmentName: string,
-  description?: string
+  description?: string,
+  aiParams?: string,
+  questionTypes?: string[]
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ teacherId, assignmentName, description: description || '' }),
+    body: JSON.stringify({
+      teacherId,
+      assignmentName,
+      description: description || '',
+      aiParams: aiParams ?? null,
+      questionTypes: questionTypes?.length ? questionTypes.join(',') : null,
+    }),
   });
   const data = await res.json();
   if (!res.ok) return { success: false, error: data.error || 'Failed to create assignment' };
@@ -77,7 +97,7 @@ export async function createAssignment(
 
 export type SavedQuestionPayload = {
   questionText: string;
-  questionType?: 'multiple_choice' | 'select_all_that_apply';
+  questionType?: 'multiple_choice' | 'select_all_that_apply' | 'true_false' | 'short_answer' | string;
   correctAnswer?: string;
   correctAnswers?: string[];
   falseAnswers: string[];
