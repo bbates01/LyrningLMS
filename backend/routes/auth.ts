@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { query } from '../db/connection.js';
 import { LoginRequest, LoginResponse, Student, Teacher } from '../types.js';
+import { issueStudentToken } from '../auth/studentToken.js';
 
 const router = express.Router();
 
@@ -130,6 +131,7 @@ router.post('/student/login', async (req: express.Request, res: express.Response
       firstName: student.first_name,
       lastName: student.last_name,
       email: student.email,
+      token: issueStudentToken(Number(student.student_id)),
     });
   } catch (error) {
     console.error('Student login error:', error);

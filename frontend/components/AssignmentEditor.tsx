@@ -94,6 +94,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
   const [questionTypes, setQuestionTypes] = useState<string[]>(['multiple_choice']);
   const [generationCommands, setGenerationCommands] = useState('');
   const [questionCount, setQuestionCount] = useState(7);
+  const [allowedSubmissions, setAllowedSubmissions] = useState(1);
   const [result, setResult] = useState('');
   const [questionsData, setQuestionsData] = useState<GenerateQuestionsResponse | null>(null);
   const [showReview, setShowReview] = useState(false);
@@ -206,7 +207,8 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
         title.trim(),
         questionsData.directions,
         aiParams.trim() || undefined,
-        questionTypes.length ? questionTypes : undefined
+        questionTypes.length ? questionTypes : undefined,
+        allowedSubmissions
       );
       if (!createRes.success || createRes.assignmentId == null) {
         setConfirmError(createRes.error || 'Failed to create assignment.');
@@ -323,6 +325,22 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
               }}
               className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Allowed student submissions</h2>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={allowedSubmissions}
+              onChange={(e) => {
+                const n = parseInt(e.target.value || '1', 10);
+                setAllowedSubmissions(Number.isNaN(n) ? 1 : Math.max(1, Math.min(n, 10)));
+              }}
+              className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-gray-400"
+            />
+            <p className="text-xs text-gray-500">Default is 1. Students cannot submit more than this limit.</p>
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">

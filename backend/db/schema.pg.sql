@@ -58,7 +58,8 @@ CREATE TABLE assignments (
     due_date        TIMESTAMPTZ,
     assignment_link TEXT UNIQUE,
     ai_params       TEXT,
-    question_types  TEXT
+    question_types  TEXT,
+    allowed_submissions INTEGER NOT NULL DEFAULT 1
 );
 
 -- Note: assignment_documents table removed; PDFs are not stored.
@@ -90,7 +91,20 @@ CREATE TABLE student_grades (
     understanding_score REAL,
     ai_dependency_score REAL,
     engagement_score    REAL,
+    submission_attempts INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (student_id, assignment_id)
+);
+
+CREATE TABLE student_assignment_responses (
+    response_id         BIGSERIAL PRIMARY KEY,
+    student_id          BIGINT NOT NULL REFERENCES students(student_id),
+    assignment_id       BIGINT NOT NULL REFERENCES assignments(assignment_id) ON DELETE CASCADE,
+    question_id         BIGINT NOT NULL REFERENCES assignment_questions(question_id) ON DELETE CASCADE,
+    attempt_number      INTEGER NOT NULL,
+    response_text       TEXT,
+    selected_option_ids TEXT,
+    is_correct          INTEGER,
+    submitted_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE student_metrics (
@@ -114,6 +128,7 @@ CREATE INDEX idx_assignment_questions_assignment ON assignment_questions(assignm
 CREATE INDEX idx_assignment_question_options_question ON assignment_question_options(question_id);
 CREATE INDEX idx_grades_student     ON student_grades(student_id);
 CREATE INDEX idx_grades_assignment  ON student_grades(assignment_id);
+CREATE INDEX idx_assignment_responses_student_assignment ON student_assignment_responses(student_id, assignment_id);
 CREATE INDEX idx_metrics_student    ON student_metrics(student_id);
 CREATE INDEX idx_metrics_class      ON student_metrics(class_id);
 

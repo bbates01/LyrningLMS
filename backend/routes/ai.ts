@@ -36,7 +36,8 @@ router.post('/chat', async (req: express.Request, res: express.Response) => {
     }
 
     const systemContent = `You are a helpful AI Tutor in the Lyrning LMS.
-Teacher's specific restrictions: ${instructions || "Don't give the student the full answer directly. Guide them with hints and examples."}`;
+  You must strictly follow the teacher's restrictions exactly. If a student asks for something that violates those restrictions, refuse and provide only the level of help allowed.
+  Teacher's specific restrictions: ${instructions || "Don't give the student the full answer directly. Guide them with hints and examples."}`;
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemContent },
@@ -192,15 +193,18 @@ Include exactly ${safeCount} items in "questions".`;
     let data: { directions: string; questions: Q[] };
     try {
       const jsonStr = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-      data = JSON.parse(jsonStr) as { directions?: string; questions?: Q[] };
-      if (!Array.isArray(data?.questions)) {
-        data = { directions: data?.directions ?? '', questions: [] };
+      const parsed = JSON.parse(jsonStr) as { directions?: string; questions?: Q[] };
+      if (!Array.isArray(parsed?.questions)) {
+        data = { directions: parsed?.directions ?? '', questions: [] };
       } else {
-        data.questions = data.questions.map((q) => ({
+        data = {
+          directions: parsed.directions ?? '',
+          questions: parsed.questions.map((q) => ({
           ...q,
           questionType: types.includes(q.questionType ?? '') ? q.questionType : types[0],
           falseAnswers: Array.isArray(q.falseAnswers) ? q.falseAnswers : [],
-        }));
+          })),
+        };
       }
     } catch (parseErr) {
       console.error('Groq generate-questions parse error:', parseErr);
@@ -267,14 +271,17 @@ Return ONLY: first the complete JSON (valid, no markdown fence), then a blank li
     type Q = { questionNumber: number; question: string; questionType?: string; correctAnswer?: string; correctAnswers?: string[]; falseAnswers?: string[] };
     let data: { directions: string; questions: Q[] };
     try {
-      data = JSON.parse(jsonStr) as { directions?: string; questions?: Q[] };
-      if (!Array.isArray(data?.questions)) {
-        data = { directions: data?.directions ?? currentQuestions.directions, questions: [] };
+      const parsed = JSON.parse(jsonStr) as { directions?: string; questions?: Q[] };
+      if (!Array.isArray(parsed?.questions)) {
+        data = { directions: parsed?.directions ?? currentQuestions.directions, questions: [] };
       } else {
-        data.questions = data.questions.map((q) => ({
-          ...q,
-          falseAnswers: Array.isArray(q.falseAnswers) ? q.falseAnswers : [],
-        }));
+        data = {
+          directions: parsed.directions ?? currentQuestions.directions,
+          questions: parsed.questions.map((q) => ({
+            ...q,
+            falseAnswers: Array.isArray(q.falseAnswers) ? q.falseAnswers : [],
+          })),
+        };
       }
     } catch {
       return res.status(500).json({

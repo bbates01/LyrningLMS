@@ -2,6 +2,34 @@ const API_BASE =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
+export interface StudentLoginResponse {
+  success: boolean;
+  role: 'student';
+  userId: number;
+  userName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  token: string;
+  error?: string;
+}
+
+export async function studentLoginWithId(
+  studentId: string,
+  password: string
+): Promise<StudentLoginResponse> {
+  const res = await fetch(`${API_BASE}/api/auth/student/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, password }),
+  });
+  const data = (await res.json()) as StudentLoginResponse;
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || 'Login failed. Check your Student ID and password.');
+  }
+  return data;
+}
+
 export async function fetchStudentClasses(studentId: number): Promise<any[]> {
   const res = await fetch(`${API_BASE}/api/classes/student/${studentId}`);
   if (!res.ok) throw new Error('Failed to fetch classes');
@@ -77,7 +105,8 @@ export async function createAssignment(
   assignmentName: string,
   description?: string,
   aiParams?: string,
-  questionTypes?: string[]
+  questionTypes?: string[],
+  allowedSubmissions?: number
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments`, {
     method: 'POST',
@@ -88,6 +117,7 @@ export async function createAssignment(
       description: description || '',
       aiParams: aiParams ?? null,
       questionTypes: questionTypes?.length ? questionTypes.join(',') : null,
+      allowedSubmissions: typeof allowedSubmissions === 'number' ? allowedSubmissions : 1,
     }),
   });
   const data = await res.json();
@@ -152,4 +182,82 @@ export async function deleteAssignment(
   const data = await res.json();
   if (!res.ok) return { success: false, error: data.error || 'Failed to delete' };
   return { success: true };
+}
+
+export interface StudentAssignmentQuestion {
+  questionId: number;
+  sortOrder: number;
+  questionText: string;
+  questionType: string;
+  options: Array<{ optionId: number; optionText: string }>;
+}
+
+export interface StudentAssignmentPayload {
+  success: boolean;
+  assignment: {
+    assignmentId: number;
+    classId: number;
+    assignmentName: string;
+    description: string | null;
+    type: string | null;
+    maxPoints: number;
+    dueDate: string | null;
+    allowedSubmissions: number;
+    aiInstructions: string | null;
+  };
+  questions: StudentAssignmentQuestion[];
+  submission: {
+    attemptsUsed: number;
+    attemptsRemaining: number;
+    canSubmit: boolean;
+  };
+  grade: {
+    pointsEarned: number | null;
+    percentage: number | null;
+    letterGrade: string | null;
+    submissionDate: string | null;
+    gradedDate: string | null;
+  } | null;
+  error?: string;
+}
+
+export async function fetchStudentAssignment(
+  classId: number,
+  assignmentId: number,
+  token: string
+): Promise<StudentAssignmentPayload> {
+  const res = await fetch(`${API_BASE}/api/student/assignments/${classId}/${assignmentId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as StudentAssignmentPayload;
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || 'Failed to load assignment');
+  }
+  return data;
+}
+
+export async function submitStudentAssignment(
+  classId: number,
+  assignmentId: number,
+  token: string,
+  answers: Array<{ questionId: number; selectedOptionIds?: number[]; responseText?: string }>
+): Promise<{
+  success: boolean;
+  submission: { attemptNumber: number; attemptsRemaining: number };
+  grade: { pointsEarned: number | null; percentage: number | null; letterGrade: string | null };
+  error?: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/student/assignments/${classId}/${assignmentId}/submit`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ answers }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || 'Failed to submit assignment');
+  }
+  return data;
 }

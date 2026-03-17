@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from 'react';
+import { studentLoginWithId } from '../services/api';
+
+const STUDENT_SESSION_KEY = 'lyrning_student_session';
 
 /**
  * Student login page (student-only).
@@ -14,59 +17,34 @@ const StudentLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  const API_BASE =
-    import.meta.env.VITE_API_URL ||
-    (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
   const handleLogin = async () => {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/student/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, password }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success) {
-        setError(data?.error || 'Login failed. Check your Student ID and password.');
+      const data = await studentLoginWithId(studentId, password);
+      window.localStorage.setItem(
+        STUDENT_SESSION_KEY,
+        JSON.stringify({
+          token: data.token,
+          userId: data.userId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+        })
+      );
+
+      if (!classId || !assignmentId) {
+        setError('Assignment link is incomplete. Ask your teacher for a valid link.');
         return;
       }
-      setSuccess(true);
-    } catch {
-      setError('Connection error. Make sure the backend server is running.');
+
+      window.location.href = `/student/assignment/${classId}/${assignmentId}`;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection error. Make sure the backend server is running.');
     } finally {
       setLoading(false);
     }
   };
-
-  if (success) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-4 text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Signed in</h1>
-            <p className="text-gray-600">
-              Success. Next step (opening the assignment) will be wired up later.
-            </p>
-            <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
-              Assignment link params: class={classId || '—'}, assignment={assignmentId || '—'}
-            </div>
-            <button
-              type="button"
-              onClick={() => setSuccess(false)}
-              className="w-full py-3 rounded-xl font-semibold text-white transition-colors"
-              style={{ backgroundColor: '#ba3638' }}
-            >
-              Back
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">

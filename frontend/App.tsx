@@ -6,6 +6,7 @@ import ClassInfo from './components/ClassInfo';
 import AssignmentView from './components/AssignmentView';
 import AssignmentEditor from './components/AssignmentEditor';
 import StudentLogin from './components/StudentLogin';
+import StudentAssignmentPage from './components/StudentAssignmentPage';
 import { ViewState, UserSession, Assignment, ClassSummary } from './types';
 import { BookOpen, Trash2 } from './components/Icons';
 import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, type AssignmentQuestionPreview } from './services/api';
@@ -17,7 +18,7 @@ function loadStoredSession(): UserSession | null {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as Record<string, unknown>;
-    if (data && typeof data.role === 'string' && data.userId != null) return data as UserSession;
+    if (data && typeof data.role === 'string' && data.userId != null) return data as unknown as UserSession;
   } catch {
     // ignore
   }
@@ -327,6 +328,15 @@ const App: React.FC = () => {
 
   if (window.location.pathname === '/student/login') {
     return <StudentLogin />;
+  }
+
+  const studentAssignmentMatch = window.location.pathname.match(/^\/student\/assignment\/(\d+)\/(\d+)$/);
+  if (studentAssignmentMatch) {
+    const classId = Number(studentAssignmentMatch[1]);
+    const assignmentId = Number(studentAssignmentMatch[2]);
+    if (Number.isFinite(classId) && Number.isFinite(assignmentId)) {
+      return <StudentAssignmentPage classId={classId} assignmentId={assignmentId} />;
+    }
   }
 
   if (!session || view === 'LOGIN') {
