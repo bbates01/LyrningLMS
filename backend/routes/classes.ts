@@ -114,7 +114,7 @@ router.get('/:classId/assignments', async (req, res) => {
   try {
     const { classId } = req.params;
     const result = await query(
-      `SELECT assignment_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types
+      `SELECT assignment_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions
        FROM assignments
        WHERE class_id = $1
        ORDER BY due_date ASC NULLS LAST`,
@@ -211,6 +211,7 @@ router.post('/:classId/assignments', async (req, res) => {
       dueDate,
       aiParams,
       questionTypes,
+      allowedSubmissions,
     } = req.body as {
       teacherId?: number;
       assignmentName?: string;
@@ -220,6 +221,7 @@ router.post('/:classId/assignments', async (req, res) => {
       dueDate?: string;
       aiParams?: string;
       questionTypes?: string;
+      allowedSubmissions?: number;
     };
 
     if (teacherId == null || !assignmentName) {
@@ -241,13 +243,17 @@ router.post('/:classId/assignments', async (req, res) => {
     }
 
     const assignmentLink = generateAssignmentLink();
+    const allowedSubmissionsNum =
+      typeof allowedSubmissions === 'number' && Number.isFinite(allowedSubmissions)
+        ? Math.max(1, Math.floor(allowedSubmissions))
+        : 1;
     const questionTypesStr =
       typeof questionTypes === 'string' ? questionTypes : Array.isArray(questionTypes) ? (questionTypes as string[]).join(',') : null;
 
     const insertResult = await query(
-      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types`,
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions`,
       [
         classId,
         assignmentName,
@@ -258,6 +264,7 @@ router.post('/:classId/assignments', async (req, res) => {
         assignmentLink,
         aiParams ?? null,
         questionTypesStr ?? null,
+        allowedSubmissionsNum,
       ]
     );
 
@@ -353,7 +360,13 @@ router.post('/:classId/assignments/:assignmentId/questions', async (req, res) =>
   try {
     const { classId, assignmentId } = req.params;
     const { questions } = req.body as {
-      questions?: { questionText: string; correctAnswer: string; falseAnswers: string[] }[];
+      questions?: {
+        questionText: string;
+        questionType?: string;
+        correctAnswer?: string;
+        correctAnswers?: string[];
+        falseAnswers: string[];
+      }[];
     };
 
     if (!questions || !Array.isArray(questions) || questions.length === 0) {

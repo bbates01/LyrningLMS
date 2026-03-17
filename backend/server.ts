@@ -5,6 +5,7 @@ import path from 'path';
 import authRoutes from './routes/auth.js';
 import classesRoutes from './routes/classes.js';
 import aiRoutes from './routes/ai.js';
+import studentRoutes from './routes/student.js';
 import { runMigrations } from './db/migrate.js';
 
 dotenv.config();
@@ -18,6 +19,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/classes', classesRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/student', studentRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Server is running' });

@@ -21,7 +21,7 @@ async function tableExists(table: string): Promise<boolean> {
     `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1 LIMIT 1`,
     [table],
   );
-  return res.rowCount > 0;
+  return res.rows.length > 0;
 }
 
 async function columnExists(table: string, column: string): Promise<boolean> {
@@ -32,7 +32,7 @@ async function columnExists(table: string, column: string): Promise<boolean> {
      LIMIT 1`,
     [table, column],
   );
-  return res.rowCount > 0;
+  return res.rows.length > 0;
 }
 
 async function main() {
@@ -58,6 +58,39 @@ async function main() {
         console.log('Migrating: adding assignments.question_types');
         await pool.query('ALTER TABLE assignments ADD COLUMN question_types TEXT;');
       }
+      const hasAllowedSubmissions = await columnExists('assignments', 'allowed_submissions');
+      if (!hasAllowedSubmissions) {
+        console.log('Migrating: adding assignments.allowed_submissions');
+        await pool.query('ALTER TABLE assignments ADD COLUMN allowed_submissions INTEGER NOT NULL DEFAULT 1;');
+      }
+    }
+
+    if (await tableExists('student_grades')) {
+      const hasSubmissionAttempts = await columnExists('student_grades', 'submission_attempts');
+      if (!hasSubmissionAttempts) {
+        console.log('Migrating: adding student_grades.submission_attempts');
+        await pool.query('ALTER TABLE student_grades ADD COLUMN submission_attempts INTEGER NOT NULL DEFAULT 0;');
+      }
+    }
+
+    if (!(await tableExists('student_assignment_responses'))) {
+      console.log('Migrating: creating student_assignment_responses');
+      await pool.query(
+        `CREATE TABLE student_assignment_responses (
+          response_id BIGSERIAL PRIMARY KEY,
+          student_id BIGINT NOT NULL REFERENCES students(student_id),
+          assignment_id BIGINT NOT NULL REFERENCES assignments(assignment_id) ON DELETE CASCADE,
+          question_id BIGINT NOT NULL REFERENCES assignment_questions(question_id) ON DELETE CASCADE,
+          attempt_number INTEGER NOT NULL,
+          response_text TEXT,
+          selected_option_ids TEXT,
+          is_correct INTEGER,
+          submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );`
+      );
+      await pool.query(
+        'CREATE INDEX IF NOT EXISTS idx_assignment_responses_student_assignment ON student_assignment_responses(student_id, assignment_id);'
+      );
     }
 
     console.log('Postgres DB already initialized');
