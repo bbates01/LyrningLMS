@@ -25,3 +25,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Cursor / agent artifacts
+.cursor/
+.agents/
+agent-transcripts/
+
+# Frontend build output (if not already covered)
+frontend/dist/

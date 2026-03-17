@@ -1,5 +1,6 @@
 import React from 'react';
 import { ClassSummary } from '../types';
+import StudentPasswordsCard from './StudentPasswordsCard';
 
 interface ClassInfoProps {
   classInfo: ClassSummary;
@@ -7,7 +8,7 @@ interface ClassInfoProps {
 
 const ClassInfo: React.FC<ClassInfoProps> = ({ classInfo }) => {
   return (
-    <div className="space-y-8 animate-fadeIn max-w-2xl">
+    <div className="space-y-8 animate-fadeIn max-w-4xl">
       <h2 className="text-4xl font-bold text-black">Class info</h2>
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="p-6 space-y-6">
@@ -44,6 +45,8 @@ const ClassInfo: React.FC<ClassInfoProps> = ({ classInfo }) => {
           </div>
         </div>
       </div>
+
+      <StudentPasswordsCard />
     </div>
   );
 };
