@@ -353,7 +353,7 @@ const App: React.FC = () => {
           />
         );
       case 'CLASS_INFO':
-        return selectedClass ? <ClassInfo classInfo={selectedClass} /> : null;
+        return selectedClass ? <ClassInfo classInfo={selectedClass} teacherUsername={session.userName} /> : null;
       case 'ASSIGNMENT_LIST':
         return renderAssignmentList();
       case 'ASSIGNMENT_EDIT':

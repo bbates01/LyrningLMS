@@ -4,9 +4,10 @@ import StudentPasswordsCard from './StudentPasswordsCard';
 
 interface ClassInfoProps {
   classInfo: ClassSummary;
+  teacherUsername?: string;
 }
 
-const ClassInfo: React.FC<ClassInfoProps> = ({ classInfo }) => {
+const ClassInfo: React.FC<ClassInfoProps> = ({ classInfo, teacherUsername }) => {
   return (
     <div className="space-y-8 animate-fadeIn max-w-4xl">
       <h2 className="text-4xl font-bold text-black">Class info</h2>
@@ -46,7 +47,7 @@ const ClassInfo: React.FC<ClassInfoProps> = ({ classInfo }) => {
         </div>
       </div>
 
-      <StudentPasswordsCard />
+      <StudentPasswordsCard teacherUsername={teacherUsername} />
     </div>
   );
 };
