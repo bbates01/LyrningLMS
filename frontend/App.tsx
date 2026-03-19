@@ -7,6 +7,7 @@ import AssignmentView from './components/AssignmentView';
 import AssignmentEditor from './components/AssignmentEditor';
 import StudentLogin from './components/StudentLogin';
 import StudentAssignmentPage from './components/StudentAssignmentPage';
+import TeacherStudentPreview from './components/TeacherStudentPreview';
 import { ViewState, UserSession, Assignment, ClassSummary } from './types';
 import { BookOpen, Trash2 } from './components/Icons';
 import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, type AssignmentQuestionPreview } from './services/api';
@@ -40,6 +41,7 @@ function mapApiAssignmentToAssignment(row: {
   max_points?: number;
   due_date?: string | null;
   assignment_link?: string | null;
+  ai_params?: string | null;
 }): Assignment {
   const typeStr = (row.type || 'homework').toLowerCase();
   const typeMap: Record<string, string> = {
@@ -61,6 +63,7 @@ function mapApiAssignmentToAssignment(row: {
     dueDate: due,
     content: row.description || undefined,
     assignmentLink: row.assignment_link || undefined,
+    aiInstructions: row.ai_params || undefined,
   };
 }
 
@@ -196,7 +199,7 @@ const App: React.FC = () => {
   }, [classAssignments, selectedClass, refetchClassAssignments]);
 
   useEffect(() => {
-    if (view !== 'ASSIGNMENT_VIEW' || !selectedAssignment || !selectedClass) {
+    if ((view !== 'ASSIGNMENT_VIEW' && view !== 'VIEW_AS_STUDENT') || !selectedAssignment || !selectedClass) {
       setAssignmentQuestions([]);
       return;
     }
@@ -374,8 +377,18 @@ const App: React.FC = () => {
             <AssignmentView
               assignment={selectedAssignment}
               classId={selectedClass.class_id}
-              onViewTeacherMode={() => setView('ASSIGNMENT_EDIT')}
+              onViewAsStudent={() => setView('VIEW_AS_STUDENT')}
               questionsPreview={assignmentQuestions}
+            />
+          )
+          : null;
+      case 'VIEW_AS_STUDENT':
+        return selectedAssignment && selectedClass
+          ? (
+            <TeacherStudentPreview
+              assignment={selectedAssignment}
+              questionsPreview={assignmentQuestions}
+              onBack={() => setView('ASSIGNMENT_VIEW')}
             />
           )
           : null;
