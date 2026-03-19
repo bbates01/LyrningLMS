@@ -37,12 +37,13 @@ export interface GenerateQuestionsResponse {
 export async function chatWithTutor(
   message: string,
   history: { role: string; content: string }[],
-  instructions: string
+  instructions: string,
+  studentId?: number
 ): Promise<string> {
   const res = await fetch(`${API_BASE}/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, instructions }),
+    body: JSON.stringify({ message, history, instructions, studentId }),
   });
   const data = await res.json();
   if (!res.ok) {

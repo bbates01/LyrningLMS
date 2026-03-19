@@ -217,6 +217,9 @@ export interface StudentAssignmentPayload {
     letterGrade: string | null;
     submissionDate: string | null;
     gradedDate: string | null;
+    understandingScore?: number | null;
+    aiDependencyScore?: number | null;
+    engagementScore?: number | null;
   } | null;
   error?: string;
 }
@@ -244,7 +247,7 @@ export async function submitStudentAssignment(
 ): Promise<{
   success: boolean;
   submission: { attemptNumber: number; attemptsRemaining: number };
-  grade: { pointsEarned: number | null; percentage: number | null; letterGrade: string | null };
+  grade: { pointsEarned: number | null; percentage: number | null; letterGrade: string | null; understandingScore?: number | null; aiDependencyScore?: number | null; engagementScore?: number | null };
   error?: string;
 }> {
   const res = await fetch(`${API_BASE}/api/student/assignments/${classId}/${assignmentId}/submit`, {

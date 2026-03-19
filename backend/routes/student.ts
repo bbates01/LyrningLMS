@@ -1,6 +1,16 @@
 import express from 'express';
 import { query } from '../db/connection.js';
 import { requireStudentAuth, type StudentAuthedRequest } from '../auth/studentToken.js';
+import OpenAI from 'openai';
+
+const groq = process.env.GROQ_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: 'https://api.groq.com/openai/v1',
+    })
+  : null;
+
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-70b-versatile';
 
 const router = express.Router();
 
@@ -327,6 +337,79 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
       [studentId, assignmentId, pointsEarned, percentage, letterGrade, attemptNumber]
     );
 
+    // Calculate metrics
+    let understandingScore: number | null = null;
+    let aiDependencyScore: number | null = null;
+    let engagementScore: number | null = null; // For now, set to percentage or something
+
+    // Get AI usage count in last 7 days
+    const aiUsageRes = await query(
+      `SELECT COUNT(*) as count FROM ai_usage_logs
+       WHERE student_id = $1 AND action = 'chat' AND timestamp > NOW() - INTERVAL '7 days'`,
+      [studentId]
+    );
+    const aiUsageCount = Number(aiUsageRes.rows[0]?.count || 0);
+    aiDependencyScore = Math.min(aiUsageCount * 10, 100); // Arbitrary scaling
+
+    // Calculate understanding based on answers
+    if (groq) {
+      const responsesRes = await query(
+        `SELECT r.response_text, r.selected_option_ids, r.is_correct, q.question_text, q.question_type
+         FROM student_assignment_responses r
+         JOIN assignment_questions q ON q.question_id = r.question_id
+         WHERE r.student_id = $1 AND r.assignment_id = $2 AND r.attempt_number = $3
+         ORDER BY q.sort_order`,
+        [studentId, assignmentId, attemptNumber]
+      );
+
+      if (responsesRes.rows.length > 0) {
+        const qaText = responsesRes.rows.map((row: any) => {
+          const question = row.question_text;
+          const answer = row.response_text || row.selected_option_ids || 'No answer';
+          const correct = row.is_correct === 1 ? 'Correct' : 'Incorrect';
+          return `Question: ${question}\nStudent Answer: ${answer}\nCorrectness: ${correct}`;
+        }).join('\n\n');
+
+        const prompt = `You are an AI evaluator for student understanding in a learning management system.
+
+Based on the following questions and student answers, provide an understanding score from 0 to 100, where 100 means perfect understanding and 0 means no understanding.
+
+Consider:
+- Accuracy of answers
+- Depth of responses for open-ended questions
+- Conceptual understanding demonstrated
+
+Output only the number (0-100).
+
+Questions and Answers:
+${qaText}`;
+
+        try {
+          const completion = await groq.chat.completions.create({
+            model: GROQ_MODEL,
+            messages: [{ role: 'user', content: prompt }],
+          });
+          const scoreText = completion.choices[0]?.message?.content?.trim();
+          const score = parseFloat(scoreText || '0');
+          understandingScore = isNaN(score) ? null : Math.max(0, Math.min(100, score));
+        } catch (err) {
+          console.error('Error calculating understanding score:', err);
+        }
+      }
+    }
+
+    engagementScore = percentage; // For now, use the grade percentage
+
+    // Update the metrics
+    await query(
+      `UPDATE student_grades SET
+        understanding_score = $1,
+        ai_dependency_score = $2,
+        engagement_score = $3
+       WHERE student_id = $4 AND assignment_id = $5`,
+      [understandingScore, aiDependencyScore, engagementScore, studentId, assignmentId]
+    );
+
     return res.json({
       success: true,
       submission: {
@@ -337,6 +420,9 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
         pointsEarned,
         percentage,
         letterGrade,
+        understandingScore,
+        aiDependencyScore,
+        engagementScore,
       },
     });
   } catch (error) {

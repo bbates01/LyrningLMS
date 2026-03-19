@@ -162,7 +162,8 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
       const reply = await chatWithTutor(
         msg,
         chatMessages.map((m) => ({ role: m.role === 'tutor' ? 'assistant' : 'user', content: m.content })),
-        assignment.aiInstructions || ''
+        assignment.aiInstructions || '',
+        session?.userId
       );
       setChatMessages((prev) => [...prev, { role: 'tutor', content: reply }]);
     } finally {
@@ -262,6 +263,25 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
             <p className="text-sm text-center font-medium" style={{ color: submitMessage.toLowerCase().includes('failed') ? '#ba3638' : '#1f2937' }}>
               {submitMessage}
             </p>
+          )}
+
+          {payload.grade && (
+            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+              <h3 className="font-bold text-green-800 mb-2">Your Grade</h3>
+              <p className="text-green-700">
+                Points: {payload.grade.pointsEarned ?? 'N/A'} / {payload.assignment.maxPoints} ({payload.grade.percentage ?? 'N/A'}%)
+              </p>
+              <p className="text-green-700">Letter Grade: {payload.grade.letterGrade ?? 'N/A'}</p>
+              {payload.grade.understandingScore != null && (
+                <p className="text-green-700">Understanding: {payload.grade.understandingScore}%</p>
+              )}
+              {payload.grade.aiDependencyScore != null && (
+                <p className="text-green-700">AI Dependency: {payload.grade.aiDependencyScore}%</p>
+              )}
+              {payload.grade.engagementScore != null && (
+                <p className="text-green-700">Engagement: {payload.grade.engagementScore}%</p>
+              )}
+            </div>
           )}
         </div>
         </div>
