@@ -10,6 +10,7 @@ export type ViewState =
   | 'ASSIGNMENT_LIST'
   | 'ASSIGNMENT_EDIT'
   | 'ASSIGNMENT_VIEW'
+  | 'VIEW_AS_STUDENT'
   | 'ASSIGNMENT_CREATE_SUCCESS';
 
 /** Class/course from API (teacher's taught classes) */
