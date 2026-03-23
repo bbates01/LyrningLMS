@@ -106,7 +106,8 @@ export async function createAssignment(
   description?: string,
   aiParams?: string,
   questionTypes?: string[],
-  allowedSubmissions?: number
+  allowedSubmissions?: number,
+  assignmentType?: string
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments`, {
     method: 'POST',
@@ -117,6 +118,7 @@ export async function createAssignment(
       description: description || '',
       aiParams: aiParams ?? null,
       questionTypes: questionTypes?.length ? questionTypes.join(',') : null,
+      type: assignmentType ?? null,
       allowedSubmissions: typeof allowedSubmissions === 'number' ? allowedSubmissions : 1,
     }),
   });

@@ -26,11 +26,12 @@ function loadStoredSession(): UserSession | null {
   return null;
 }
 
-const ASSIGNMENT_CATEGORIES: { label: string; types: string[] }[] = [
-  { label: 'Exams', types: ['Exam', 'Quiz'] },
-  { label: 'Assignments', types: ['Homework'] },
-  { label: 'Labs', types: ['Lab'] },
-  { label: 'Projects', types: ['Project'] },
+const ASSIGNMENT_CATEGORIES: { label: string; types: string[]; createTypeDb: string }[] = [
+  // Note: "Exams" shows both Exam + Quiz. We default new items to `quiz`.
+  { label: 'Exams', types: ['Exam', 'Quiz'], createTypeDb: 'quiz' },
+  { label: 'Assignments', types: ['Homework'], createTypeDb: 'homework' },
+  { label: 'Labs', types: ['Lab'], createTypeDb: 'lab' },
+  { label: 'Projects', types: ['Project'], createTypeDb: 'project' },
 ];
 
 function mapApiAssignmentToAssignment(row: {
@@ -127,6 +128,7 @@ const App: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [createdClassId, setCreatedClassId] = useState<number | null>(null);
   const [createdAssignmentId, setCreatedAssignmentId] = useState<number | null>(null);
+  const [newAssignmentTypeDb, setNewAssignmentTypeDb] = useState<string>('homework');
   const isRestoringFromHistory = useRef(false);
 
   const refetchClassAssignments = useCallback(() => {
@@ -262,7 +264,7 @@ const App: React.FC = () => {
     <div className="space-y-10 animate-fadeIn">
       <h2 className="text-4xl font-bold text-black">Assignments</h2>
 
-      {ASSIGNMENT_CATEGORIES.map(({ label, types }) => {
+      {ASSIGNMENT_CATEGORIES.map(({ label, types, createTypeDb }) => {
         const items = classAssignments.filter((a) => types.includes(a.type));
         return (
           <div key={label} className="space-y-3">
@@ -271,7 +273,10 @@ const App: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-700">{label}</h3>
               <button
                 type="button"
-                onClick={() => setView('ASSIGNMENT_EDIT')}
+                onClick={() => {
+                  setNewAssignmentTypeDb(createTypeDb);
+                  setView('ASSIGNMENT_EDIT');
+                }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
               >
                 <span className="text-base leading-none">+</span> Add
@@ -364,6 +369,7 @@ const App: React.FC = () => {
           <AssignmentEditor
             classId={selectedClass?.class_id ?? 0}
             teacherId={session.userId ?? 0}
+            assignmentType={newAssignmentTypeDb}
             onAssignmentCreated={(classId, assignmentId) => {
               setCreatedClassId(classId);
               setCreatedAssignmentId(assignmentId);

@@ -86,9 +86,11 @@ interface Props {
   classId: number;
   teacherId: number;
   onAssignmentCreated?: (classId: number, assignmentId: number) => void;
+  // Stored into `assignments.type` so the created assignment shows under the correct section.
+  assignmentType?: string;
 }
 
-const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCreated }) => {
+const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCreated, assignmentType = 'homework' }) => {
   const [title, setTitle] = useState('');
   const [aiParams, setAiParams] = useState('');
   const [questionTypes, setQuestionTypes] = useState<string[]>(['multiple_choice']);
@@ -208,7 +210,8 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
         questionsData.directions,
         aiParams.trim() || undefined,
         questionTypes.length ? questionTypes : undefined,
-        allowedSubmissions
+        allowedSubmissions,
+        assignmentType
       );
       if (!createRes.success || createRes.assignmentId == null) {
         setConfirmError(createRes.error || 'Failed to create assignment.');
