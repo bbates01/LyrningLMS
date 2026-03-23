@@ -65,6 +65,50 @@ export async function runMigrations(): Promise<void> {
       );
       console.log('Migration: added student_assignment_responses');
     }
+
+    const hasAiUsageLogs = await query(
+      `SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'ai_usage_logs' LIMIT 1`
+    );
+    if (hasAiUsageLogs.rows.length === 0) {
+      await query(
+        `CREATE TABLE ai_usage_logs (
+          log_id BIGSERIAL PRIMARY KEY,
+          student_id BIGINT REFERENCES students(student_id),
+          action TEXT NOT NULL,
+          timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          details JSONB
+        )`
+      );
+      console.log('Migration: added ai_usage_logs');
+    }
+
+    const hasUnderstandingScore = await query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'student_grades' AND column_name = 'understanding_score' LIMIT 1`
+    );
+    if (hasUnderstandingScore.rows.length === 0) {
+      await query('ALTER TABLE student_grades ADD COLUMN understanding_score REAL');
+      console.log('Migration: added student_grades.understanding_score');
+    }
+
+    const hasAiDependencyScore = await query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'student_grades' AND column_name = 'ai_dependency_score' LIMIT 1`
+    );
+    if (hasAiDependencyScore.rows.length === 0) {
+      await query('ALTER TABLE student_grades ADD COLUMN ai_dependency_score REAL');
+      console.log('Migration: added student_grades.ai_dependency_score');
+    }
+
+    const hasEngagementScore = await query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'student_grades' AND column_name = 'engagement_score' LIMIT 1`
+    );
+    if (hasEngagementScore.rows.length === 0) {
+      await query('ALTER TABLE student_grades ADD COLUMN engagement_score REAL');
+      console.log('Migration: added student_grades.engagement_score');
+    }
   } catch (err) {
     console.error('Migration error (non-fatal):', err);
   }

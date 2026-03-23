@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import OpenAI from 'openai';
 import { PDFParse } from 'pdf-parse';
+import { query } from '../db/connection.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -25,14 +26,23 @@ router.post('/chat', async (req: express.Request, res: express.Response) => {
   }
 
   try {
-    const { message, history = [], instructions = '' } = req.body as {
+    const { message, history = [], instructions = '', studentId } = req.body as {
       message?: string;
       history?: { role: string; content: string }[];
       instructions?: string;
+      studentId?: number;
     };
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ success: false, error: 'message is required' });
+    }
+
+    // Log AI usage if studentId provided
+    if (studentId && Number.isFinite(studentId)) {
+      await query(
+        `INSERT INTO ai_usage_logs (student_id, action, details) VALUES ($1, $2, $3)`,
+        [studentId, 'chat', { messageLength: message.length, historyLength: history.length }]
+      );
     }
 
     const systemContent = `You are a helpful AI Tutor in the Lyrning LMS.
