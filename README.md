@@ -236,22 +236,33 @@ A new teammate can run the project by: installing Node, copying `.env`, running 
 
 15. All developers shall clone the GitHub repository and configure their environment according to the README instructions. *(Sprint 1 — Everyone)*
 
+16. When a user attempts to log in, the system shall restrict the teacher login page to teacher credentials only.
+
+17. When a student attempts to access assignments, the system shall provide a student-specific access page through assignment links.
+
+18. When a student logs in, the system shall authenticate the student credentials before allowing access to the assignment completion page.
+
+19. When generating assignments, the system shall combine the default AI parameters and the custom teacher instructions defined in the assignment configuration.
+
+20. When a student interacts with the assignment system, the system shall provide an AI chat interface for assistance.
+
 ---
 
 ## Not Complete
 
-1. When a student opens an assignment link, the system shall allow the student to access the assignment page.
+1. The system shall calculate an AI dependency metric based on conversations students have with the AI tutor that can be viewed by teachers.
 
-2. When a user attempts to log in, the system shall restrict the teacher login page to teacher credentials only.
+2. When a student opens an assignment completion page, the system shall synchronize assignment questions and answers from the database.
 
-3. When a student attempts to access assignments, the system shall provide a student-specific access page through assignment links.
+3. The system shall calculate an understanding metric based student's average scores on assignments.
 
-4. When a student accesses an assignment, the system shall provide an assessment page interface for completing the assignment.
 
-5. When a student opens an assignment completion page, the system shall synchronize assignment questions and answers from the database.
 
-6. When a student logs in, the system shall authenticate the student credentials before allowing access to the assignment completion page.
 
-7. When a student interacts with the assignment system, the system shall provide an AI chat interface for assistance.
 
-8. When generating assignments, the system shall combine the default AI parameters and the custom teacher instructions defined in the assignment configuration.
+
+
+
+
+
+
