@@ -2,7 +2,7 @@
 
 A learning management system that integrates AI as a guided learning tool while giving teachers visibility into student understanding, engagement, and AI dependency.
 
-**Current vertical slice:** Adding a student to a class by class code (teacher shares code → student enters code in “Add class” → enrollment is created). Creating assignments and submitting work are not implemented yet.
+**Current vertical slice (Sprint 1):** Teachers can upload a PDF, AI generates assignment questions, teachers can edit and confirm them, and an assignment link is created for sharing with students. Students can open the assignment, answer questions, and submit — their grade is stored in the database along with AI-generated metrics (understanding, engagement, and AI-dependency scores). Adding a student to a class by class code is also fully supported.
 
 ---
 
@@ -63,6 +63,19 @@ Organized by layer:
 - **Frontend:** SPA that calls the backend for auth, class list, enrollment, and assignments.
 - **Backend:** Serves REST endpoints; talks to Postgres and (for AI) to Groq.
 - **Database:** Holds users, classes, enrollments, assignments, and grades. **Class codes** (see below) allow students to join classes without exposing primary keys.
+
+---
+
+## Definition of Done
+
+A user story or task is considered **Done** when all of the following are true:
+
+- The feature is fully implemented and matches the acceptance criteria on the Trello card.
+- The code is committed and pushed to the shared GitHub repository on the correct branch.
+- The README (and ERD if schema changed) has been updated to reflect any new or changed functionality.
+- The feature works end-to-end in a local environment using the setup steps in this README.
+- No known critical bugs remain for the feature being closed.
+- The Trello card has been moved to **Done** or **Accepted by Product Owner**.
 
 ---
 
@@ -209,36 +222,36 @@ A new teammate can run the project by: installing Node, copying `.env`, running 
 
 8. When an assignment is created, the system shall store AI parameters associated with that assignment in the database.
 
+9. When an assignment is created, the system shall generate a shareable assignment link for teachers. *(Sprint 1 — Will)*
+
+10. When a teacher requests an assignment link, the system shall allow the teacher to copy the link to share with students. *(Sprint 1 — Will)*
+
+11. When a student completes an assignment, the system shall synchronize the completed assignment data with the teacher’s system. *(Sprint 1 — Jake)*
+
+12. When a student completes an assignment, the system shall generate performance metrics based on the student’s responses. *(Sprint 1 — Jake)*
+
+13. When a student submits an assignment, the system shall assign a default grade based on the accuracy of the student’s answers. *(Sprint 1 — Jake)*
+
+14. The system documentation shall include an updated ERD reflecting AI assignment parameters and related schema changes. *(Sprint 1 — Marielle)*
+
+15. All developers shall clone the GitHub repository and configure their environment according to the README instructions. *(Sprint 1 — Everyone)*
+
 ---
 
 ## Not Complete
 
-1. When an assignment is created, the system shall generate a shareable assignment link for teachers.
+1. When a student opens an assignment link, the system shall allow the student to access the assignment page.
 
-2. When a teacher requests an assignment link, the system shall allow the teacher to copy the link to share with students.
+2. When a user attempts to log in, the system shall restrict the teacher login page to teacher credentials only.
 
-3. When a student opens an assignment link, the system shall allow the student to access the assignment page.
+3. When a student attempts to access assignments, the system shall provide a student-specific access page through assignment links.
 
-4. When a user attempts to log in, the system shall restrict the teacher login page to teacher credentials only.
+4. When a student accesses an assignment, the system shall provide an assessment page interface for completing the assignment.
 
-5. When a student attempts to access assignments, the system shall provide a student-specific access page through assignment links.
+5. When a student opens an assignment completion page, the system shall synchronize assignment questions and answers from the database.
 
-6. The system documentation shall include an updated ERD reflecting AI assignment parameters and related schema changes.
+6. When a student logs in, the system shall authenticate the student credentials before allowing access to the assignment completion page.
 
-7. All developers shall clone the GitHub repository and configure their environment according to the README instructions.
+7. When a student interacts with the assignment system, the system shall provide an AI chat interface for assistance.
 
-8. When a student accesses an assignment, the system shall provide an assessment page interface for completing the assignment.
-
-9. When a student opens an assignment completion page, the system shall synchronize assignment questions and answers from the database.
-
-10. When a student logs in, the system shall authenticate the student credentials before allowing access to the assignment completion page.
-
-11. When a student completes an assignment, the system shall synchronize the completed assignment data with the teacher’s system.
-
-12. When a student completes an assignment, the system shall generate performance metrics based on the student’s responses.
-
-13. When a student submits an assignment, the system shall assign a default grade based on the accuracy of the student’s answers.
-
-14. When a student interacts with the assignment system, the system shall provide an AI chat interface for assistance.
-
-15. When generating assignments, the system shall combine the default AI parameters and the custom teacher instructions defined in the assignment configuration.
+8. When generating assignments, the system shall combine the default AI parameters and the custom teacher instructions defined in the assignment configuration.
