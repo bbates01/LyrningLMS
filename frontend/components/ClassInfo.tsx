@@ -47,7 +47,7 @@ const ClassInfo: React.FC<ClassInfoProps> = ({ classInfo, teacherUsername }) => 
         </div>
       </div>
 
-      <StudentPasswordsCard teacherUsername={teacherUsername} />
+      <StudentPasswordsCard teacherUsername={teacherUsername} classId={classInfo.class_id} />
     </div>
   );
 };

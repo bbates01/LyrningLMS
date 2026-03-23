@@ -65,6 +65,35 @@ router.get('/student/:studentId', async (req, res) => {
   }
 });
 
+// GET /api/classes/:classId/students — enrolled students for a class
+router.get('/:classId/students', async (req, res) => {
+  try {
+    const classId = Number(req.params.classId);
+    if (!Number.isFinite(classId)) {
+      return res.status(400).json({ success: false, error: 'Invalid class id' });
+    }
+
+    const result = await query(
+      `SELECT
+         s.student_id,
+         s.first_name,
+         s.last_name,
+         s.email,
+         s.username
+       FROM student_classes sc
+       JOIN students s ON s.student_id = sc.student_id
+       WHERE sc.class_id = $1 AND LOWER(TRIM(sc.status)) = 'active'
+       ORDER BY s.student_id ASC`,
+      [classId]
+    );
+
+    return res.json({ success: true, students: result.rows });
+  } catch (err) {
+    console.error('Error fetching enrolled students:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch students for class' });
+  }
+});
+
 // GET /api/classes/teacher/:teacherId — classes the teacher teaches
 router.get('/teacher/:teacherId', async (req, res) => {
   try {

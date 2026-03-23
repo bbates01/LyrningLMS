@@ -28,6 +28,10 @@ function generatePassword(length = 10): string {
   return out;
 }
 
+// This is the bcrypt hash used by the current seed.sql/seed.pg.sql.
+// We will convert it to per-student random defaults when the teacher first opens Class Info.
+const SEEDED_DEFAULT_PASSWORD_HASH = '$2b$12$8zdkLMBe8.oFbsRIl9ycp.uPg5u1NYIBCzdgtoqzgovrPis4vajai';
+
 router.post('/login', async (req: express.Request, res: express.Response) => {
   try {
     const { username, password, userType } = req.body as LoginRequest;
@@ -93,34 +97,50 @@ router.post('/login', async (req: express.Request, res: express.Response) => {
 
 /**
  * POST /api/auth/student/login
- * Body: { studentId: number|string, password: string }
+ * Body: { username?: string, studentId?: number|string, password: string }
  *
- * Student-only login that authenticates by student_id.
+ * Student-only login that authenticates by `username` (preferred) or `student_id`.
  * (Teacher login continues to use /login with username + userType=teacher.)
  */
 router.post('/student/login', async (req: express.Request, res: express.Response) => {
   try {
-    const rawStudentId = (req.body as { studentId?: unknown })?.studentId;
-    const password = (req.body as { password?: unknown })?.password;
+    const body = req.body as { username?: unknown; studentId?: unknown; password?: unknown };
+    const rawUsername = body?.username;
+    const rawStudentId = body?.studentId;
+    const password = typeof body?.password === 'string' ? body.password : '';
+
+    const username = typeof rawUsername === 'string' ? rawUsername.trim() : '';
     const studentId = typeof rawStudentId === 'string' || typeof rawStudentId === 'number' ? Number(rawStudentId) : NaN;
 
-    if (!Number.isFinite(studentId) || studentId <= 0 || typeof password !== 'string' || !password) {
-      return res.status(400).json({ success: false, error: 'studentId and password are required' });
+    if (!username && !(Number.isFinite(studentId) && studentId > 0) && typeof password === 'string' && !password) {
+      // (This branch is intentionally unreachable; kept for clarity.)
     }
 
-    const result = await query(
-      'SELECT student_id, first_name, last_name, email, username, password_hash FROM students WHERE student_id = $1',
-      [studentId]
-    );
+    if (!((username && typeof username === 'string') || (Number.isFinite(studentId) && studentId > 0)) || typeof password !== 'string' || !password) {
+      return res.status(400).json({ success: false, error: 'username or studentId and password are required' });
+    }
+
+    let result;
+    if (username) {
+      result = await query(
+        'SELECT student_id, first_name, last_name, email, username, password_hash FROM students WHERE username = $1',
+        [username]
+      );
+    } else {
+      result = await query(
+        'SELECT student_id, first_name, last_name, email, username, password_hash FROM students WHERE student_id = $1',
+        [studentId]
+      );
+    }
 
     if (result.rows.length === 0) {
-      return res.status(401).json({ success: false, error: 'Invalid student ID or password' });
+      return res.status(401).json({ success: false, error: 'Invalid username or password' });
     }
 
     const student = result.rows[0] as Pick<Student, 'student_id' | 'first_name' | 'last_name' | 'email' | 'username' | 'password_hash'>;
     const ok = await bcrypt.compare(password, student.password_hash);
     if (!ok) {
-      return res.status(401).json({ success: false, error: 'Invalid student ID or password' });
+      return res.status(401).json({ success: false, error: 'Invalid username or password' });
     }
 
     return res.json({
@@ -175,6 +195,13 @@ router.post('/students/passwords/generate', async (req: express.Request, res: ex
     for (const row of generated) {
       const hash = await bcrypt.hash(row.password, saltRounds);
       await query('UPDATE students SET password_hash = $1 WHERE student_id = $2', [hash, row.studentId]);
+      await query(
+        `INSERT INTO student_passwords_plaintext (student_id, password_plaintext)
+         VALUES ($1, $2)
+         ON CONFLICT (student_id)
+         DO UPDATE SET password_plaintext = EXCLUDED.password_plaintext, updated_at = NOW()`,
+        [row.studentId, row.password]
+      );
     }
 
     return res.json({
@@ -185,6 +212,62 @@ router.post('/students/passwords/generate', async (req: express.Request, res: ex
   } catch (error) {
     console.error('Generate student passwords error:', error);
     return res.status(500).json({ success: false, error: 'Server error generating passwords' });
+  }
+});
+
+/**
+ * POST /api/auth/students/passwords/ensure-default
+ *
+ * For students whose `password_hash` is still the seeded default, replaces it with a unique
+ * random bcrypt hash and returns the plaintext passwords once (for the teacher UI).
+ */
+router.post('/students/passwords/ensure-default', async (req: express.Request, res: express.Response) => {
+  try {
+    const body = req.body as { passwordLength?: unknown };
+    const passwordLengthRaw = typeof body.passwordLength === 'number' ? body.passwordLength : 10;
+    const passwordLength = Math.max(8, Math.min(32, Math.floor(passwordLengthRaw)));
+
+    // Generate random defaults only for students still using the seeded default password hash.
+    const found = await query(
+      'SELECT student_id FROM students WHERE password_hash = $1 ORDER BY student_id',
+      [SEEDED_DEFAULT_PASSWORD_HASH]
+    );
+
+    const foundIds = found.rows.map((r) => Number(r.student_id)).filter((n) => Number.isFinite(n));
+
+    const saltRounds = 12;
+    const generated: { studentId: number; password: string }[] = [];
+
+    for (const id of foundIds) {
+      const password = generatePassword(passwordLength);
+      const hash = await bcrypt.hash(password, saltRounds);
+      await query('UPDATE students SET password_hash = $1 WHERE student_id = $2', [hash, id]);
+      await query(
+        `INSERT INTO student_passwords_plaintext (student_id, password_plaintext)
+         VALUES ($1, $2)
+         ON CONFLICT (student_id)
+         DO UPDATE SET password_plaintext = EXCLUDED.password_plaintext, updated_at = NOW()`,
+        [id, password]
+      );
+      generated.push({ studentId: id, password });
+    }
+
+    const plaintextRes = await query(
+      'SELECT student_id, password_plaintext FROM student_passwords_plaintext ORDER BY student_id'
+    );
+
+    return res.json({
+      success: true,
+      generated,
+      generatedCount: generated.length,
+      passwords: plaintextRes.rows.map((r) => ({
+        studentId: Number(r.student_id),
+        password: r.password_plaintext,
+      })),
+    });
+  } catch (error) {
+    console.error('Ensure default student passwords error:', error);
+    return res.status(500).json({ success: false, error: 'Server error ensuring default passwords' });
   }
 });
 
@@ -220,6 +303,13 @@ router.post('/students/passwords/save', async (req: express.Request, res: expres
       if (!foundSet.has(u.studentId)) continue;
       const hash = await bcrypt.hash(u.password, saltRounds);
       await query('UPDATE students SET password_hash = $1 WHERE student_id = $2', [hash, u.studentId]);
+      await query(
+        `INSERT INTO student_passwords_plaintext (student_id, password_plaintext)
+         VALUES ($1, $2)
+         ON CONFLICT (student_id)
+         DO UPDATE SET password_plaintext = EXCLUDED.password_plaintext, updated_at = NOW()`,
+        [u.studentId, u.password]
+      );
       updatedCount++;
     }
 

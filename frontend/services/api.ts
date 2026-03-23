@@ -14,18 +14,18 @@ export interface StudentLoginResponse {
   error?: string;
 }
 
-export async function studentLoginWithId(
-  studentId: string,
+export async function studentLoginWithUsername(
+  username: string,
   password: string
 ): Promise<StudentLoginResponse> {
   const res = await fetch(`${API_BASE}/api/auth/student/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ studentId, password }),
+    body: JSON.stringify({ username, password }),
   });
   const data = (await res.json()) as StudentLoginResponse;
   if (!res.ok || !data?.success) {
-    throw new Error(data?.error || 'Login failed. Check your Student ID and password.');
+    throw new Error(data?.error || 'Login failed. Check your username and password.');
   }
   return data;
 }

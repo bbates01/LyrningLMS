@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { studentLoginWithId } from '../services/api';
+import { studentLoginWithUsername } from '../services/api';
 
 const STUDENT_SESSION_KEY = 'lyrning_student_session';
 
@@ -13,7 +13,7 @@ const StudentLogin: React.FC = () => {
     return [params.get('class') ?? '', params.get('assignment') ?? ''];
   }, []);
 
-  const [studentId, setStudentId] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +22,7 @@ const StudentLogin: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      const data = await studentLoginWithId(studentId, password);
+      const data = await studentLoginWithUsername(username, password);
       window.localStorage.setItem(
         STUDENT_SESSION_KEY,
         JSON.stringify({
@@ -56,12 +56,12 @@ const StudentLogin: React.FC = () => {
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Student ID</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
             <input
               type="text"
-              value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
-              placeholder="Student ID (number)"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="e.g. student_123"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ba3638]/30 focus:border-[#ba3638]"
               disabled={loading}
             />

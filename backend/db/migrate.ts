@@ -2,7 +2,21 @@
  * Run lightweight migrations so the app works even if DB was created before
  * ai_params and question_types were added to assignments.
  */
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { query } from './connection.js';
+
+function generatePassword(length = 10): string {
+  // Avoid ambiguous chars (0/O, 1/I/l)
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = crypto.randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
+// This is the bcrypt hash used by the current seed.sql/seed.pg.sql.
+const SEEDED_DEFAULT_PASSWORD_HASH = '$2b$12$8zdkLMBe8.oFbsRIl9ycp.uPg5u1NYIBCzdgtoqzgovrPis4vajai';
 
 export async function runMigrations(): Promise<void> {
   try {
@@ -82,6 +96,62 @@ export async function runMigrations(): Promise<void> {
       );
       console.log('Migration: added ai_usage_logs');
     }
+
+    // Plaintext passwords are only used so the teacher UI can display/share passwords after logout.
+    // Password hashes remain the source of truth for authentication.
+    const hasStudentPasswordsPlaintext = await query(
+      `SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'student_passwords_plaintext' LIMIT 1`
+    );
+    if (hasStudentPasswordsPlaintext.rows.length === 0) {
+      await query(
+        `CREATE TABLE student_passwords_plaintext (
+          student_id BIGINT PRIMARY KEY REFERENCES students(student_id) ON DELETE CASCADE,
+          password_plaintext TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`
+      );
+      console.log('Migration: added student_passwords_plaintext');
+    }
+
+    // Ensure every student has a usable password and a teacher-visible plaintext password.
+    // - If the plaintext row is missing, generate a new random password, update `students.password_hash`,
+    //   and store plaintext for the teacher UI.
+    // - If the plaintext row exists, we do not override it (so teacher edits persist).
+    const missingOrSeededDefaults = await query(
+      `SELECT s.student_id
+       FROM students s
+       LEFT JOIN student_passwords_plaintext sp ON sp.student_id = s.student_id
+       WHERE sp.student_id IS NULL OR s.password_hash = '${SEEDED_DEFAULT_PASSWORD_HASH}'
+       ORDER BY s.student_id`
+    );
+
+    if (missingOrSeededDefaults.rows.length > 0) {
+      const saltRounds = 12;
+      const passwordLength = 10;
+      for (const row of missingOrSeededDefaults.rows) {
+        const studentId = Number(row.student_id);
+        if (!Number.isFinite(studentId) || studentId <= 0) continue;
+
+        const password = generatePassword(passwordLength);
+        const hash = await bcrypt.hash(password, saltRounds);
+
+        await query('UPDATE students SET password_hash = $1 WHERE student_id = $2', [hash, studentId]);
+        await query(
+          `INSERT INTO student_passwords_plaintext (student_id, password_plaintext)
+           VALUES ($1, $2)
+           ON CONFLICT (student_id)
+           DO UPDATE SET password_plaintext = EXCLUDED.password_plaintext, updated_at = NOW()`,
+          [studentId, password]
+        );
+      }
+      console.log(`Migration: ensured random default passwords for ${missingOrSeededDefaults.rows.length} student(s)`);
+    }
+
+    // Safety: if for some reason a student has the seeded-default password hash but still has no plaintext row,
+    // the block above will have populated plaintext. We keep this here as documentation.
+    // (Not actively used beyond the logic above.)
+    void SEEDED_DEFAULT_PASSWORD_HASH;
 
     const hasUnderstandingScore = await query(
       `SELECT 1 FROM information_schema.columns

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import { existsSync } from 'node:fs';
 import authRoutes from './routes/auth.js';
 import classesRoutes from './routes/classes.js';
 import aiRoutes from './routes/ai.js';
@@ -27,12 +28,17 @@ app.get('/health', (req, res) => {
 
 // Serve the built frontend on Render/production.
 const frontendDistPath = path.resolve(process.cwd(), 'frontend', 'dist');
-app.use(express.static(frontendDistPath));
+const frontendIndexPath = path.join(frontendDistPath, 'index.html');
+const hasFrontendDist = existsSync(frontendIndexPath);
 
-// SPA fallback (must be after API routes).
-app.get('*', (req, res) => {
-  res.sendFile(path.join(frontendDistPath, 'index.html'));
-});
+if (hasFrontendDist) {
+  app.use(express.static(frontendDistPath));
+
+  // SPA fallback (must be after API routes).
+  app.get('*', (req, res) => {
+    res.sendFile(frontendIndexPath);
+  });
+}
 
 runMigrations()
   .then(() => {

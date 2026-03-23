@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 type ExistingStudent = {
   student_id: number;
@@ -10,6 +10,7 @@ type ExistingStudent = {
 
 interface StudentPasswordsCardProps {
   teacherUsername?: string;
+  classId: number;
 }
 
 const PASSWORDS_STORAGE_KEY = 'lyrning_student_passwords_by_id';
@@ -46,7 +47,7 @@ function findStudentByLookupToken(students: ExistingStudent[], lookupToken: stri
   return students.find((s) => s.username.toLowerCase() === lowerToken) ?? null;
 }
 
-const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUsername }) => {
+const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUsername, classId }) => {
   const [studentLookup, setStudentLookup] = useState('');
   const [error, setError] = useState<string>('');
   const [existingStudents, setExistingStudents] = useState<ExistingStudent[]>([]);
@@ -67,6 +68,7 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const didHydrateFromBackendRef = useRef(false);
 
   const selectedStudentName = useMemo(() => {
     if (!selectedStudent) return '';
@@ -96,7 +98,8 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
             next[numericKey] = v;
           }
         }
-        setPasswordsByStudentId(next);
+        // Only hydrate from localStorage if we haven't already fetched fresh plaintexts from the backend.
+        if (!didHydrateFromBackendRef.current) setPasswordsByStudentId(next);
         return;
       }
 
@@ -104,7 +107,9 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
       const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
       if (!legacyRaw) return;
       const legacyData = JSON.parse(legacyRaw) as { rows?: unknown };
-      setPasswordsByStudentId(toPasswordMapFromLegacyRows(legacyData.rows));
+      if (!didHydrateFromBackendRef.current) {
+        setPasswordsByStudentId(toPasswordMapFromLegacyRows(legacyData.rows));
+      }
     } catch {
       // ignore bad data
     }
@@ -123,14 +128,20 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
   useEffect(() => {
     setExistingError('');
     setLoadingExisting(true);
-    fetch(`${API_BASE}/api/auth/students`)
+    fetch(`${API_BASE}/api/classes/${classId}/students`)
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok || !data?.success) {
           setExistingError(data?.error || 'Failed to load students');
           return;
         }
-        setExistingStudents((data.students as ExistingStudent[]) ?? []);
+        // Backend returns `student_id` as a string; normalize to number for consistent lookups/storage.
+        setExistingStudents(
+          (((data.students as any[]) ?? []) as any[]).map((s) => ({
+            ...s,
+            student_id: Number(s.student_id),
+          })) as ExistingStudent[]
+        );
       })
       .catch(() => {
         setExistingError('Connection error. Make sure the backend server is running.');
@@ -138,7 +149,50 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
       .finally(() => {
         setLoadingExisting(false);
       });
-  }, []);
+  }, [classId]);
+
+  // Populate the teacher-visible plaintext password view from the backend.
+  // This makes passwords persist across logouts/browsers (backend stores plaintext defaults separately).
+  useEffect(() => {
+    if (loadingExisting) return;
+    if (existingStudents.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/students/passwords/ensure-default`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passwordLength: 10 }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.success) return;
+
+        const plaintextRows = Array.isArray(data?.passwords) ? data.passwords : [];
+        const map: Record<number, string> = {};
+        for (const row of plaintextRows) {
+          const id = Number(row?.studentId);
+          if (Number.isFinite(id) && typeof row?.password === 'string') {
+            map[id] = row.password;
+          }
+        }
+
+        if (cancelled) return;
+        didHydrateFromBackendRef.current = true;
+        setPasswordsByStudentId(map);
+
+        if (Number(data?.generatedCount) > 0) {
+          setSaveMessage('Default student passwords generated.');
+        }
+      } catch {
+        // ignore: plaintext view will remain empty
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadingExisting, existingStudents]);
 
   const resetModalState = () => {
     setTeacherPassword('');
@@ -238,8 +292,13 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data?.success) {
-        setSaveMessage(data?.error || 'Failed to save password.');
+      if (!res.ok || !data?.success || Number(data.updatedCount) <= 0) {
+        const missingIds = Array.isArray(data?.missingIds) ? data.missingIds : [];
+        setSaveMessage(
+          missingIds?.length
+            ? 'Failed to save password (student not found).'
+            : data?.error || 'Failed to save password.'
+        );
         return;
       }
 
@@ -344,7 +403,7 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
         )}
 
         <p className="text-xs text-gray-500">
-          Note: passwords are stored as <span className="font-medium">bcrypt hashes</span>. This view can only show plaintext passwords previously generated or saved from this browser session.
+          Note: passwords are stored as <span className="font-medium">bcrypt hashes</span>, and the backend also stores teacher-visible plaintext defaults for this admin UI so passwords remain available after logout.
         </p>
       </div>
 

@@ -97,7 +97,7 @@ async function ensureStudentCanAccess(studentId: number, classId: number, assign
   const enrollmentRes = await query(
     `SELECT 1
      FROM student_classes
-     WHERE student_id = $1 AND class_id = $2 AND status = 'active'`,
+     WHERE student_id = $1 AND class_id = $2`,
     [studentId, classId]
   );
 
