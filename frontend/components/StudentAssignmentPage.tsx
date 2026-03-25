@@ -32,6 +32,7 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
   const [answers, setAnswers] = useState<Record<number, AnswerState>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
+  const [questionResults, setQuestionResults] = useState<Record<number, number | null>>({});
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'tutor'; content: string }>>([]);
@@ -121,6 +122,13 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
       const points = result.grade.pointsEarned != null ? `${result.grade.pointsEarned}` : 'Pending';
       const letter = result.grade.letterGrade ?? 'Pending';
       setSubmitMessage(`Submitted. Score: ${points} pts (${percent}, ${letter}).`);
+      if (result.questionResults) {
+        const resultsMap: Record<number, number | null> = {};
+        for (const r of result.questionResults) {
+          resultsMap[r.questionId] = r.isCorrect;
+        }
+        setQuestionResults(resultsMap);
+      }
       await loadAssignment();
     } catch (err) {
       setSubmitMessage(err instanceof Error ? err.message : 'Submission failed');
@@ -197,9 +205,25 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
           ) : (
             payload.questions.map((q) => (
               <div key={q.questionId} className="border-b border-gray-100 pb-6 last:border-b-0 last:pb-0">
-                <p className="font-semibold text-gray-900 mb-3">
-                  {q.sortOrder}. {q.questionText}
-                </p>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <p className="font-semibold text-gray-900">
+                    {q.sortOrder}. {q.questionText}
+                    {q.questionType === 'select_all_that_apply' && (
+                      <span className="ml-2 text-sm font-normal text-gray-500 italic">(Select all that apply)</span>
+                    )}
+                  </p>
+                  {q.questionId in questionResults && (
+                    questionResults[q.questionId] === 1 ? (
+                      <span className="shrink-0 flex items-center gap-1 text-sm font-semibold text-green-600 bg-green-50 border border-green-200 rounded-lg px-2 py-0.5">
+                        ✓ Correct
+                      </span>
+                    ) : questionResults[q.questionId] === 0 ? (
+                      <span className="shrink-0 flex items-center gap-1 text-sm font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-0.5">
+                        ✗ Incorrect
+                      </span>
+                    ) : null
+                  )}
+                </div>
 
                 {q.questionType === 'short_answer' ? (
                   <textarea

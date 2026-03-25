@@ -16,7 +16,7 @@ export async function extractPdfText(files: File[]): Promise<string[]> {
   return data.texts ?? [];
 }
 
-export type QuestionType = 'multiple_choice' | 'select_all_that_apply';
+export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer' | 'select_all_that_apply';
 
 export interface GeneratedQuestion {
   questionNumber: number;

@@ -250,6 +250,7 @@ export async function submitStudentAssignment(
   success: boolean;
   submission: { attemptNumber: number; attemptsRemaining: number };
   grade: { pointsEarned: number | null; percentage: number | null; letterGrade: string | null; understandingScore?: number | null; aiDependencyScore?: number | null; engagementScore?: number | null };
+  questionResults?: Array<{ questionId: number; isCorrect: number | null }>;
   error?: string;
 }> {
   const res = await fetch(`${API_BASE}/api/student/assignments/${classId}/${assignmentId}/submit`, {

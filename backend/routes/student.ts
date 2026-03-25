@@ -60,8 +60,9 @@ function groupQuestions(rows: AssignmentQuestionRow[]) {
   }>();
 
   for (const row of rows) {
-    const existing = byId.get(row.question_id) || {
-      questionId: row.question_id,
+    const qId = Number(row.question_id);
+    const existing = byId.get(qId) || {
+      questionId: qId,
       sortOrder: row.sort_order,
       questionText: row.question_text,
       questionType: normalizeType(row.question_type),
@@ -70,13 +71,13 @@ function groupQuestions(rows: AssignmentQuestionRow[]) {
 
     if (row.option_id != null && row.option_text != null && row.is_correct != null) {
       existing.options.push({
-        option_id: row.option_id,
+        option_id: Number(row.option_id),
         option_text: row.option_text,
         is_correct: row.is_correct,
       });
     }
 
-    byId.set(row.question_id, existing);
+    byId.set(qId, existing);
   }
 
   return Array.from(byId.values()).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -266,13 +267,43 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
     let objectiveCorrect = 0;
 
     const attemptNumber = attemptsUsed + 1;
+    const questionResults: { questionId: number; isCorrect: number | null }[] = [];
 
     for (const q of groupedQuestions) {
       const studentAnswer = answerByQuestionId.get(q.questionId) ?? { selectedOptionIds: [], responseText: '' };
       let isCorrect: number | null = null;
       const type = normalizeType(q.questionType);
 
-      if (type !== 'short_answer') {
+      if (type === 'short_answer') {
+        objectiveTotal += 1;
+        const expectedAnswer = q.options.find((o) => o.is_correct === 1)?.option_text?.trim() || '';
+        const studentResponse = studentAnswer.responseText.trim();
+
+        if (!studentResponse) {
+          isCorrect = 0;
+        } else if (groq) {
+          try {
+            const completion = await groq.chat.completions.create({
+              model: GROQ_MODEL,
+              messages: [{
+                role: 'user',
+                content: `You are grading a short answer question. Be reasonably lenient — accept answers that demonstrate correct understanding even if worded differently.\n\nQuestion: "${q.questionText}"\nExpected answer: "${expectedAnswer}"\nStudent's answer: "${studentResponse}"\n\nIs the student's answer correct or acceptably close to the expected answer? Reply with only "1" for correct or "0" for incorrect.`,
+              }],
+              max_tokens: 5,
+            });
+            const result = completion.choices[0]?.message?.content?.trim();
+            isCorrect = result === '1' ? 1 : 0;
+          } catch {
+            // Fallback to case-insensitive string match if AI fails
+            isCorrect = studentResponse.toLowerCase() === expectedAnswer.toLowerCase() ? 1 : 0;
+          }
+        } else {
+          // No AI available — fall back to simple string comparison
+          isCorrect = studentResponse.toLowerCase() === expectedAnswer.toLowerCase() ? 1 : 0;
+        }
+
+        if (isCorrect === 1) objectiveCorrect += 1;
+      } else {
         objectiveTotal += 1;
 
         const selected = new Set(studentAnswer.selectedOptionIds);
@@ -286,6 +317,8 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
 
         if (isCorrect === 1) objectiveCorrect += 1;
       }
+
+      questionResults.push({ questionId: q.questionId, isCorrect });
 
       await query(
         `INSERT INTO student_assignment_responses (
@@ -424,6 +457,7 @@ ${qaText}`;
         aiDependencyScore,
         engagementScore,
       },
+      questionResults,
     });
   } catch (error) {
     console.error('Student assignment submit error:', error);

@@ -16,28 +16,38 @@ function formatQuestionsForDisplay(data: GenerateQuestionsResponse): string {
   lines.push('');
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   for (const q of data.questions) {
-    lines.push(`${q.questionNumber}. ${q.question}`);
-    const correctList = (q.correctAnswers && q.correctAnswers.length > 0)
-      ? q.correctAnswers
-      : (q.correctAnswer ? [q.correctAnswer] : []);
-    const falseList = q.falseAnswers || [];
-    let letterIdx = 0;
-    for (const c of correctList) {
-      if (c != null && String(c).trim() !== '') {
-        lines.push(`${letters[letterIdx]}. ${String(c).trim()} (Correct)`);
-        letterIdx++;
+    const qType = q.questionType || 'multiple_choice';
+    // Include the question type tag so it can be round-tripped through parse
+    lines.push(`${q.questionNumber}. [${qType}] ${q.question}`);
+    if (qType === 'short_answer') {
+      // Short-answer questions: show expected answer instead of lettered options
+      const answer = q.correctAnswer || (q.correctAnswers && q.correctAnswers[0]) || '';
+      lines.push(`Expected answer: ${answer}`);
+    } else {
+      const correctList = (q.correctAnswers && q.correctAnswers.length > 0)
+        ? q.correctAnswers
+        : (q.correctAnswer ? [q.correctAnswer] : []);
+      const falseList = q.falseAnswers || [];
+      let letterIdx = 0;
+      for (const c of correctList) {
+        if (c != null && String(c).trim() !== '') {
+          lines.push(`${letters[letterIdx]}. ${String(c).trim()} (Correct)`);
+          letterIdx++;
+        }
       }
-    }
-    for (const fa of falseList) {
-      if (fa != null && String(fa).trim() !== '') {
-        lines.push(`${letters[letterIdx]}. ${String(fa).trim()}`);
-        letterIdx++;
+      for (const fa of falseList) {
+        if (fa != null && String(fa).trim() !== '') {
+          lines.push(`${letters[letterIdx]}. ${String(fa).trim()}`);
+          letterIdx++;
+        }
       }
     }
     lines.push('');
   }
   return lines.join('\n').trimEnd();
 }
+
+const VALID_QUESTION_TYPES = ['multiple_choice', 'true_false', 'short_answer', 'select_all_that_apply'] as const;
 
 function parseQuestionsFromDisplayText(text: string): GenerateQuestionsResponse | null {
   let directions = '';
@@ -53,23 +63,40 @@ function parseQuestionsFromDisplayText(text: string): GenerateQuestionsResponse 
     const lines = block.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) continue;
     const firstLine = lines[0];
-    const numMatch = firstLine.match(/^(\d+)\.\s*(.*)$/);
+    // Support optional [questionType] tag: "1. [short_answer] Question text"
+    const numMatch = firstLine.match(/^(\d+)\.\s*(?:\[([^\]]+)\]\s*)?(.*)$/);
     if (!numMatch) continue;
     const questionNumber = parseInt(numMatch[1], 10);
-    const questionText = numMatch[2].trim();
-    const correctAnswers: string[] = [];
-    const falseAnswers: string[] = [];
-    for (let i = 1; i < lines.length; i++) {
-      const m = lines[i].match(/^([A-Z])\.\s*(.*)$/);
-      if (!m) continue;
-      const optText = m[2].replace(/\s*\(Correct\)\s*$/i, '').trim();
-      if (lines[i].toLowerCase().includes('(correct)')) correctAnswers.push(optText);
-      else falseAnswers.push(optText);
-    }
-    if (correctAnswers.length > 1) {
-      questions.push({ questionNumber, question: questionText, correctAnswers, falseAnswers, questionType: 'select_all_that_apply' });
+    const taggedType = VALID_QUESTION_TYPES.includes(numMatch[2] as typeof VALID_QUESTION_TYPES[number])
+      ? (numMatch[2] as typeof VALID_QUESTION_TYPES[number])
+      : null;
+    const questionText = numMatch[3].trim();
+
+    if (taggedType === 'short_answer') {
+      // Short-answer questions store their expected answer in an "Expected answer:" line
+      let expectedAnswer = '';
+      for (let i = 1; i < lines.length; i++) {
+        const m = lines[i].match(/^Expected answer:\s*(.*)$/i);
+        if (m) { expectedAnswer = m[1].trim(); break; }
+      }
+      questions.push({ questionNumber, question: questionText, questionType: 'short_answer', correctAnswer: expectedAnswer, falseAnswers: [] });
     } else {
-      questions.push({ questionNumber, question: questionText, correctAnswer: correctAnswers[0] ?? '', falseAnswers });
+      const correctAnswers: string[] = [];
+      const falseAnswers: string[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const m = lines[i].match(/^([A-Z])\.\s*(.*)$/);
+        if (!m) continue;
+        const optText = m[2].replace(/\s*\(Correct\)\s*$/i, '').trim();
+        if (lines[i].toLowerCase().includes('(correct)')) correctAnswers.push(optText);
+        else falseAnswers.push(optText);
+      }
+      // Use explicit type tag if present; otherwise infer from answer count
+      if (taggedType === 'select_all_that_apply' || (!taggedType && correctAnswers.length > 1)) {
+        questions.push({ questionNumber, question: questionText, correctAnswers, falseAnswers, questionType: 'select_all_that_apply' });
+      } else {
+        const inferredType = taggedType || 'multiple_choice';
+        questions.push({ questionNumber, question: questionText, questionType: inferredType, correctAnswer: correctAnswers[0] ?? '', falseAnswers });
+      }
     }
   }
 
