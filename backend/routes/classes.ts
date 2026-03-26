@@ -501,6 +501,90 @@ router.post('/:classId/assignments/:assignmentId/questions', async (req, res) =>
   }
 });
 
+// GET /api/classes/:classId/grades — all assignments with student grades for a class
+router.get('/:classId/grades', async (req, res) => {
+  try {
+    const classId = Number(req.params.classId);
+    if (!Number.isFinite(classId)) {
+      return res.status(400).json({ success: false, error: 'Invalid class id' });
+    }
+
+    // Fetch all assignments for the class
+    const assignmentsResult = await query(
+      `SELECT assignment_id, assignment_name, type, max_points, due_date
+       FROM assignments
+       WHERE class_id = $1
+       ORDER BY due_date ASC NULLS LAST`,
+      [classId]
+    );
+
+    // Fetch all enrolled students
+    const studentsResult = await query(
+      `SELECT s.student_id, s.first_name, s.last_name
+       FROM student_classes sc
+       JOIN students s ON s.student_id = sc.student_id
+       WHERE sc.class_id = $1 AND LOWER(TRIM(sc.status)) = 'active'
+       ORDER BY s.last_name ASC, s.first_name ASC`,
+      [classId]
+    );
+
+    // Fetch all grades for assignments in this class
+    const gradesResult = await query(
+      `SELECT sg.student_id, sg.assignment_id, sg.points_earned, sg.percentage,
+              sg.letter_grade, sg.submission_date
+       FROM student_grades sg
+       JOIN assignments a ON a.assignment_id = sg.assignment_id
+       WHERE a.class_id = $1`,
+      [classId]
+    );
+
+    // Index grades by assignment_id -> student_id
+    const gradeMap = new Map<number, Map<number, any>>();
+    for (const g of gradesResult.rows as any[]) {
+      if (!gradeMap.has(g.assignment_id)) {
+        gradeMap.set(g.assignment_id, new Map());
+      }
+      gradeMap.get(g.assignment_id)!.set(g.student_id, g);
+    }
+
+    const students = (studentsResult.rows as any[]).map((s) => ({
+      studentId: s.student_id,
+      firstName: s.first_name,
+      lastName: s.last_name,
+    }));
+
+    const assignments = (assignmentsResult.rows as any[]).map((a) => {
+      const assignGrades = gradeMap.get(a.assignment_id);
+      const studentGrades = students.map((s) => {
+        const grade = assignGrades?.get(s.studentId);
+        return {
+          studentId: s.studentId,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          submitted: !!grade,
+          pointsEarned: grade?.points_earned ?? null,
+          percentage: grade?.percentage ?? null,
+          letterGrade: grade?.letter_grade ?? null,
+          submissionDate: grade?.submission_date ?? null,
+        };
+      });
+      return {
+        assignmentId: a.assignment_id,
+        assignmentName: a.assignment_name,
+        type: a.type,
+        maxPoints: a.max_points,
+        dueDate: a.due_date,
+        students: studentGrades,
+      };
+    });
+
+    return res.json({ success: true, assignments });
+  } catch (err) {
+    console.error('Error fetching class grades:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch grades' });
+  }
+});
+
 // GET /api/classes/assignments/:assignmentId/pdf — no longer supported (PDFs not stored)
 router.get('/assignments/:assignmentId/pdf', async (_req, res) => {
   return res

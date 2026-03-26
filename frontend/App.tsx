@@ -8,6 +8,7 @@ import AssignmentEditor from './components/AssignmentEditor';
 import StudentLogin from './components/StudentLogin';
 import StudentAssignmentPage from './components/StudentAssignmentPage';
 import TeacherStudentPreview from './components/TeacherStudentPreview';
+import TeacherGrades from './components/TeacherGrades';
 import { ViewState, UserSession, Assignment, ClassSummary } from './types';
 import { BookOpen, Trash2 } from './components/Icons';
 import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, type AssignmentQuestionPreview } from './services/api';
@@ -360,6 +361,8 @@ const App: React.FC = () => {
             onSelectClass={handleSelectClass}
           />
         );
+      case 'GRADES':
+        return selectedClass ? <TeacherGrades classId={selectedClass.class_id} /> : null;
       case 'CLASS_INFO':
         return selectedClass ? <ClassInfo classInfo={selectedClass} teacherUsername={session.userName} /> : null;
       case 'ASSIGNMENT_LIST':
