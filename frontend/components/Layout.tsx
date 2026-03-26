@@ -96,6 +96,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
             </button>
             <button
               type="button"
+              onClick={() => onViewChange('GRADES')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                currentView === 'GRADES'
+                  ? 'bg-white text-black shadow-sm border border-gray-200'
+                  : 'text-gray-600 hover:text-black hover:bg-white/70'
+              }`}
+            >
+              Grades
+            </button>
+            <button
+              type="button"
               onClick={() => onViewChange('CLASS_INFO')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 currentView === 'CLASS_INFO'

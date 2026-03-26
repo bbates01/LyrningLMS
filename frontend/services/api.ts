@@ -188,6 +188,33 @@ export async function deleteAssignment(
   return { success: true };
 }
 
+export interface AssignmentStudentGrade {
+  studentId: number;
+  firstName: string;
+  lastName: string;
+  submitted: boolean;
+  pointsEarned: number | null;
+  percentage: number | null;
+  letterGrade: string | null;
+  submissionDate: string | null;
+}
+
+export interface AssignmentGradeSummary {
+  assignmentId: number;
+  assignmentName: string;
+  type: string | null;
+  maxPoints: number;
+  dueDate: string | null;
+  students: AssignmentStudentGrade[];
+}
+
+export async function fetchClassGrades(classId: number): Promise<AssignmentGradeSummary[]> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}/grades`);
+  if (!res.ok) throw new Error('Failed to fetch grades');
+  const data = await res.json();
+  return data.assignments ?? [];
+}
+
 export interface StudentAssignmentQuestion {
   questionId: number;
   sortOrder: number;
