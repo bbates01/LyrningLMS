@@ -50,6 +50,17 @@ function normalizeType(raw: string | null | undefined): string {
   return raw;
 }
 
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const copy = [...arr];
+  let s = seed;
+  for (let i = copy.length - 1; i > 0; i--) {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    const j = (s >>> 0) % (i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 function groupQuestions(rows: AssignmentQuestionRow[]) {
   const byId = new Map<number, {
     questionId: number;
@@ -85,7 +96,7 @@ function groupQuestions(rows: AssignmentQuestionRow[]) {
 
 async function ensureStudentCanAccess(studentId: number, classId: number, assignmentId: number) {
   const assignmentRes = await query(
-    `SELECT assignment_id, class_id, assignment_name, description, type, max_points, due_date, allowed_submissions, ai_params
+    `SELECT assignment_id, class_id, assignment_name, description, type, max_points, due_date, allowed_submissions, ai_params, pdf_summary
      FROM assignments
      WHERE assignment_id = $1 AND class_id = $2`,
     [assignmentId, classId]
@@ -116,6 +127,7 @@ async function ensureStudentCanAccess(studentId: number, classId: number, assign
     due_date: string | null;
     allowed_submissions: number;
     ai_params: string | null;
+    pdf_summary: string | null;
   } };
 }
 
@@ -177,13 +189,14 @@ router.get('/assignments/:classId/:assignmentId', requireStudentAuth, async (req
         dueDate: access.assignment.due_date,
         allowedSubmissions,
         aiInstructions: access.assignment.ai_params,
+        pdfSummary: access.assignment.pdf_summary,
       },
       questions: groupedQuestions.map((q) => ({
         questionId: q.questionId,
         sortOrder: q.sortOrder,
         questionText: q.questionText,
         questionType: q.questionType,
-        options: q.options.map((o) => ({
+        options: seededShuffle(q.options, studentId * 1000 + q.questionId).map((o) => ({
           optionId: o.option_id,
           optionText: o.option_text,
         })),

@@ -153,6 +153,15 @@ export async function runMigrations(): Promise<void> {
     // (Not actively used beyond the logic above.)
     void SEEDED_DEFAULT_PASSWORD_HASH;
 
+    const hasPdfSummary = await query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'assignments' AND column_name = 'pdf_summary' LIMIT 1`
+    );
+    if (hasPdfSummary.rows.length === 0) {
+      await query('ALTER TABLE assignments ADD COLUMN pdf_summary TEXT');
+      console.log('Migration: added assignments.pdf_summary');
+    }
+
     const hasUnderstandingScore = await query(
       `SELECT 1 FROM information_schema.columns
        WHERE table_schema = 'public' AND table_name = 'student_grades' AND column_name = 'understanding_score' LIMIT 1`

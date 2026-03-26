@@ -59,7 +59,8 @@ CREATE TABLE assignments (
     assignment_link TEXT UNIQUE,
     ai_params       TEXT,
     question_types  TEXT,
-    allowed_submissions INTEGER NOT NULL DEFAULT 1
+    allowed_submissions INTEGER NOT NULL DEFAULT 1,
+    pdf_summary     TEXT
 );
 
 -- Note: assignment_documents table removed; PDFs are not stored.

@@ -132,6 +132,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
   const [isSaving, setIsSaving] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [pdfSummary, setPdfSummary] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState('');
   const [confirmError, setConfirmError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +173,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
         questionTypes,
         generationCommands
       );
+      setPdfSummary(data.pdfSummary ?? null);
       setQuestionsData(data);
       setResult(formatQuestionsForDisplay(data));
       setShowReview(true);
@@ -238,7 +240,8 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
         aiParams.trim() || undefined,
         questionTypes.length ? questionTypes : undefined,
         allowedSubmissions,
-        assignmentType
+        assignmentType,
+        pdfSummary
       );
       if (!createRes.success || createRes.assignmentId == null) {
         setConfirmError(createRes.error || 'Failed to create assignment.');
@@ -274,7 +277,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
       confirmInProgressRef.current = false;
       setIsSaving(false);
     }
-  }, [classId, teacherId, title, questionsData, aiParams, questionTypes, pendingFiles, onAssignmentCreated]);
+  }, [classId, teacherId, title, questionsData, aiParams, questionTypes, pendingFiles, onAssignmentCreated, pdfSummary, allowedSubmissions, assignmentType]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
