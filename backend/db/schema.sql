@@ -65,7 +65,8 @@ CREATE TABLE assignments (
     assignment_link TEXT UNIQUE,
     ai_params       TEXT,
     question_types  TEXT,
-    allowed_submissions INTEGER NOT NULL DEFAULT 1
+    allowed_submissions INTEGER NOT NULL DEFAULT 1,
+    pdf_summary     TEXT
 );
 
 -- Assignment PDF documents (stored in DB as BLOB; multiple per assignment)

@@ -241,6 +241,7 @@ router.post('/:classId/assignments', async (req, res) => {
       aiParams,
       questionTypes,
       allowedSubmissions,
+      pdfSummary,
     } = req.body as {
       teacherId?: number;
       assignmentName?: string;
@@ -251,6 +252,7 @@ router.post('/:classId/assignments', async (req, res) => {
       aiParams?: string;
       questionTypes?: string;
       allowedSubmissions?: number;
+      pdfSummary?: string;
     };
 
     if (teacherId == null || !assignmentName) {
@@ -280,9 +282,9 @@ router.post('/:classId/assignments', async (req, res) => {
       typeof questionTypes === 'string' ? questionTypes : Array.isArray(questionTypes) ? (questionTypes as string[]).join(',') : null;
 
     const insertResult = await query(
-      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions`,
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions, pdf_summary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions, pdf_summary`,
       [
         classId,
         assignmentName,
@@ -294,6 +296,7 @@ router.post('/:classId/assignments', async (req, res) => {
         aiParams ?? null,
         questionTypesStr ?? null,
         allowedSubmissionsNum,
+        pdfSummary ?? null,
       ]
     );
 

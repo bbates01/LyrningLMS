@@ -38,12 +38,13 @@ export async function chatWithTutor(
   message: string,
   history: { role: string; content: string }[],
   instructions: string,
-  studentId?: number
+  studentId?: number,
+  assignmentContext?: string
 ): Promise<string> {
   const res = await fetch(`${API_BASE}/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, instructions, studentId }),
+    body: JSON.stringify({ message, history, instructions, studentId, assignmentContext }),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -59,7 +60,7 @@ export async function generateAssignmentQuestions(
   questionCount: number,
   questionTypes: string[],
   generationCommands?: string
-): Promise<GenerateQuestionsResponse> {
+): Promise<GenerateQuestionsResponse & { pdfSummary?: string | null }> {
   const res = await fetch(`${API_BASE}/api/ai/generate-questions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -79,7 +80,7 @@ export async function generateAssignmentQuestions(
   if (!body.data || !Array.isArray(body.data.questions)) {
     throw new Error('Invalid response from server.');
   }
-  return body.data as GenerateQuestionsResponse;
+  return { ...(body.data as GenerateQuestionsResponse), pdfSummary: body.pdfSummary ?? null };
 }
 
 export async function batchUpdateQuestions(

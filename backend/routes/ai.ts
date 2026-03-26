@@ -26,11 +26,12 @@ router.post('/chat', async (req: express.Request, res: express.Response) => {
   }
 
   try {
-    const { message, history = [], instructions = '', studentId } = req.body as {
+    const { message, history = [], instructions = '', studentId, assignmentContext = '' } = req.body as {
       message?: string;
       history?: { role: string; content: string }[];
       instructions?: string;
       studentId?: number;
+      assignmentContext?: string;
     };
 
     if (!message || typeof message !== 'string') {
@@ -47,7 +48,8 @@ router.post('/chat', async (req: express.Request, res: express.Response) => {
 
     const systemContent = `You are a helpful AI Tutor in the Lyrning LMS.
   You must strictly follow the teacher's restrictions exactly. If a student asks for something that violates those restrictions, refuse and provide only the level of help allowed.
-  Teacher's specific restrictions: ${instructions || "Don't give the student the full answer directly. Guide them with hints and examples."}`;
+  Teacher's specific restrictions: ${instructions || "Don't give the student the full answer directly. Guide them with hints and examples."}
+${assignmentContext ? `\nHere is the assignment context to help you assist the student (DO NOT reveal answers directly — guide them with hints and explanations instead):\n${assignmentContext}` : ''}`;
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemContent },
@@ -223,7 +225,23 @@ Include exactly ${safeCount} items in "questions".`;
         error: 'AI did not return valid JSON. Try again.',
       });
     }
-    return res.json({ success: true, data });
+    let pdfSummary: string | null = null;
+    if (Array.isArray(materials) && materials.length && materials.some((t) => typeof t === 'string' && t.length > 0)) {
+      try {
+        const summaryCompletion = await groq.chat.completions.create({
+          model: GROQ_MODEL,
+          messages: [{
+            role: 'user',
+            content: `Summarize the following document content in 2-4 paragraphs for a student study aid. Focus on key concepts, definitions, and main ideas:\n\n${materials.map((t, i) => `--- Document ${i + 1} ---\n${typeof t === 'string' ? t.slice(0, 40000) : ''}`).join('\n\n')}`,
+          }],
+        });
+        pdfSummary = summaryCompletion.choices[0]?.message?.content?.trim() || null;
+      } catch (summaryErr) {
+        console.error('PDF summary generation error (non-fatal):', summaryErr);
+      }
+    }
+
+    return res.json({ success: true, data, pdfSummary });
   } catch (err) {
     console.error('Groq generate-questions error:', err);
     return res.status(500).json({

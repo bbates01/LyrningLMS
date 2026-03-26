@@ -69,6 +69,22 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
     loadAssignment();
   }, [loadAssignment]);
 
+  const assignmentContext = useMemo(() => {
+    if (!payload) return '';
+    const parts: string[] = [];
+    if (payload.assignment.pdfSummary) {
+      parts.push(`Document Summary:\n${payload.assignment.pdfSummary}`);
+    }
+    if (payload.questions.length > 0) {
+      const questionsText = payload.questions.map((q) => {
+        const optionsStr = q.options.map((o) => `  - ${o.optionText}`).join('\n');
+        return `Q${q.sortOrder}: ${q.questionText}\n${optionsStr}`;
+      }).join('\n\n');
+      parts.push(`Assignment Questions:\n${questionsText}`);
+    }
+    return parts.length > 0 ? parts.join('\n\n') : '';
+  }, [payload]);
+
   const setSingleSelect = (questionId: number, optionId: number) => {
     setAnswers((prev) => ({
       ...prev,
@@ -171,7 +187,8 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
         msg,
         chatMessages.map((m) => ({ role: m.role === 'tutor' ? 'assistant' : 'user', content: m.content })),
         assignment.aiInstructions || '',
-        session?.userId
+        session?.userId,
+        assignmentContext
       );
       setChatMessages((prev) => [...prev, { role: 'tutor', content: reply }]);
     } finally {

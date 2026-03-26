@@ -107,7 +107,8 @@ export async function createAssignment(
   aiParams?: string,
   questionTypes?: string[],
   allowedSubmissions?: number,
-  assignmentType?: string
+  assignmentType?: string,
+  pdfSummary?: string | null
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments`, {
     method: 'POST',
@@ -120,6 +121,7 @@ export async function createAssignment(
       questionTypes: questionTypes?.length ? questionTypes.join(',') : null,
       type: assignmentType ?? null,
       allowedSubmissions: typeof allowedSubmissions === 'number' ? allowedSubmissions : 1,
+      pdfSummary: pdfSummary ?? null,
     }),
   });
   const data = await res.json();
@@ -206,6 +208,7 @@ export interface StudentAssignmentPayload {
     dueDate: string | null;
     allowedSubmissions: number;
     aiInstructions: string | null;
+    pdfSummary: string | null;
   };
   questions: StudentAssignmentQuestion[];
   submission: {
