@@ -9,9 +9,10 @@ import StudentLogin from './components/StudentLogin';
 import StudentAssignmentPage from './components/StudentAssignmentPage';
 import TeacherStudentPreview from './components/TeacherStudentPreview';
 import TeacherGrades from './components/TeacherGrades';
+import TeacherMetrics from './components/TeacherMetrics';
 import { ViewState, UserSession, Assignment, ClassSummary } from './types';
 import { BookOpen, Trash2 } from './components/Icons';
-import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, type AssignmentQuestionPreview } from './services/api';
+import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, updateAssignment, type AssignmentQuestionPreview } from './services/api';
 
 const SESSION_STORAGE_KEY = 'lyrning_session';
 
@@ -44,6 +45,10 @@ function mapApiAssignmentToAssignment(row: {
   due_date?: string | null;
   assignment_link?: string | null;
   ai_params?: string | null;
+  allowed_submissions?: number;
+  attempt_scoring_policy?: 'latest' | 'highest' | 'average' | string | null;
+  allow_partial_short_answer?: boolean | null;
+  allow_partial_select_all_that_apply?: boolean | null;
 }): Assignment {
   const typeStr = (row.type || 'homework').toLowerCase();
   const typeMap: Record<string, string> = {
@@ -63,9 +68,18 @@ function mapApiAssignmentToAssignment(row: {
     description: row.description || undefined,
     type: typeMap[typeStr] || typeStr,
     dueDate: due,
+    dueDateRaw: row.due_date ?? null,
     content: row.description || undefined,
     assignmentLink: row.assignment_link || undefined,
     aiInstructions: row.ai_params || undefined,
+    maxPoints: row.max_points ?? 100,
+    allowedSubmissions: row.allowed_submissions ?? 1,
+    attemptScoringPolicy:
+      row.attempt_scoring_policy === 'highest' || row.attempt_scoring_policy === 'average'
+        ? row.attempt_scoring_policy
+        : 'latest',
+    allowPartialShortAnswer: Boolean(row.allow_partial_short_answer),
+    allowPartialSelectAllThatApply: Boolean(row.allow_partial_select_all_that_apply),
   };
 }
 
@@ -127,6 +141,7 @@ const App: React.FC = () => {
   const [assignmentQuestions, setAssignmentQuestions] = useState<AssignmentQuestionPreview[]>([]);
   const [assignmentToDelete, setAssignmentToDelete] = useState<Assignment | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteAssignmentError, setDeleteAssignmentError] = useState('');
   const [createdClassId, setCreatedClassId] = useState<number | null>(null);
   const [createdAssignmentId, setCreatedAssignmentId] = useState<number | null>(null);
   const [newAssignmentTypeDb, setNewAssignmentTypeDb] = useState<string>('homework');
@@ -243,18 +258,22 @@ const App: React.FC = () => {
   };
 
   const handleDeleteAssignmentClick = (assignment: Assignment) => {
+    setDeleteAssignmentError('');
     setAssignmentToDelete(assignment);
   };
 
   const handleDeleteAssignmentConfirm = async () => {
     if (!assignmentToDelete || !selectedClass) return;
     setIsDeleting(true);
+    setDeleteAssignmentError('');
     try {
       const res = await deleteAssignment(selectedClass.class_id, Number(assignmentToDelete.id));
       if (res.success) {
         setClassAssignments((prev) => prev.filter((a) => a.id !== assignmentToDelete.id));
         setAssignmentToDelete(null);
         if (selectedAssignment?.id === assignmentToDelete.id) setSelectedAssignment(null);
+      } else {
+        setDeleteAssignmentError(res.error || 'Failed to delete assignment.');
       }
     } finally {
       setIsDeleting(false);
@@ -359,12 +378,28 @@ const App: React.FC = () => {
           <ClassSelect
             userId={session.userId!}
             onSelectClass={handleSelectClass}
+            onClassCreated={handleSelectClass}
           />
         );
       case 'GRADES':
-        return selectedClass ? <TeacherGrades classId={selectedClass.class_id} /> : null;
+        return selectedClass ? <TeacherGrades classId={selectedClass.class_id} teacherId={session.userId ?? 0} /> : null;
+      case 'METRICS':
+        return selectedClass ? <TeacherMetrics classId={selectedClass.class_id} /> : null;
       case 'CLASS_INFO':
-        return selectedClass ? <ClassInfo classInfo={selectedClass} teacherUsername={session.userName} /> : null;
+        return selectedClass ? (
+          <ClassInfo
+            classInfo={selectedClass}
+            teacherId={session.userId ?? 0}
+            teacherUsername={session.userName}
+            onClassUpdated={(updatedClass) => setSelectedClass(updatedClass)}
+            onClassDeleted={() => {
+              setSelectedClass(null);
+              setSelectedAssignment(null);
+              setClassAssignments([]);
+              setView('CLASS_SELECT');
+            }}
+          />
+        ) : null;
       case 'ASSIGNMENT_LIST':
         return renderAssignmentList();
       case 'ASSIGNMENT_EDIT':
@@ -387,7 +422,34 @@ const App: React.FC = () => {
               assignment={selectedAssignment}
               classId={selectedClass.class_id}
               onViewAsStudent={() => setView('VIEW_AS_STUDENT')}
+              onSaveAssignment={async (updates) => {
+                if (!session.userId) return { success: false, error: 'Missing teacher session' };
+                const res = await updateAssignment(
+                  selectedClass.class_id,
+                  Number(selectedAssignment.id),
+                  {
+                    teacherId: session.userId,
+                    assignmentName: updates.assignmentName,
+                    description: updates.description,
+                    dueDate: updates.noDueDate ? '' : updates.dueDate,
+                    aiParams: updates.aiParams,
+                    maxPoints: updates.maxPoints,
+                    allowedSubmissions: updates.allowedSubmissions,
+                    attemptScoringPolicy: updates.attemptScoringPolicy,
+                    allowPartialShortAnswer: updates.allowPartialShortAnswer,
+                    allowPartialSelectAllThatApply: updates.allowPartialSelectAllThatApply,
+                  }
+                );
+                if (!res.success) return { success: false, error: res.error || 'Failed to update assignment' };
+                await refetchClassAssignments();
+                return { success: true };
+              }}
               questionsPreview={assignmentQuestions}
+              onQuestionsUpdated={async () => {
+                await refetchClassAssignments();
+                const refreshedQuestions = await fetchAssignmentQuestions(selectedClass.class_id, Number(selectedAssignment.id));
+                setAssignmentQuestions(refreshedQuestions);
+              }}
             />
           )
           : null;
@@ -458,6 +520,11 @@ const App: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
             <p className="text-gray-900 font-medium mb-2">Delete &quot;{assignmentToDelete.title}&quot; assignment?</p>
             <p className="text-sm text-gray-600 mb-4">This action cannot be undone.</p>
+            {deleteAssignmentError && (
+              <p className="text-sm font-medium mb-3" style={{ color: '#ba3638' }}>
+                {deleteAssignmentError}
+              </p>
+            )}
             <div className="flex gap-3 justify-end">
               <button
                 type="button"

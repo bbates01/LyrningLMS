@@ -54,7 +54,13 @@ const StudentLogin: React.FC = () => {
           <p className="text-gray-600 mt-1">Enter your details to open the assignment</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-5">
+        <form
+          className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!loading) void handleLogin();
+          }}
+        >
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
             <input
@@ -83,21 +89,15 @@ const StudentLogin: React.FC = () => {
             </p>
           )}
           <button
-            type="button"
-            onClick={handleLogin}
+            type="submit"
             disabled={loading}
             className="w-full py-3 rounded-xl font-semibold text-white transition-colors"
             style={{ backgroundColor: '#ba3638' }}
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
-        </div>
+        </form>
 
-        {(classId || assignmentId) && (
-          <p className="text-xs text-gray-500 mt-4 text-center">
-            Assignment link: class={classId || '—'}, assignment={assignmentId || '—'}
-          </p>
-        )}
       </div>
     </div>
   );

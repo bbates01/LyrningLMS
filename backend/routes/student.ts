@@ -25,6 +25,7 @@ type AssignmentQuestionRow = {
   sort_order: number;
   question_text: string;
   question_type: string;
+  max_points: number | null;
   option_id: number | null;
   option_text: string | null;
   is_correct: number | null;
@@ -50,6 +51,13 @@ function normalizeType(raw: string | null | undefined): string {
   return raw;
 }
 
+function isPastDue(dueDateRaw: string | null | undefined): boolean {
+  if (!dueDateRaw) return false;
+  const due = new Date(dueDateRaw);
+  if (Number.isNaN(due.getTime())) return false;
+  return Date.now() > due.getTime();
+}
+
 function seededShuffle<T>(arr: T[], seed: number): T[] {
   const copy = [...arr];
   let s = seed;
@@ -67,6 +75,7 @@ function groupQuestions(rows: AssignmentQuestionRow[]) {
     sortOrder: number;
     questionText: string;
     questionType: string;
+    maxPoints: number;
     options: AssignmentQuestionOption[];
   }>();
 
@@ -77,6 +86,7 @@ function groupQuestions(rows: AssignmentQuestionRow[]) {
       sortOrder: row.sort_order,
       questionText: row.question_text,
       questionType: normalizeType(row.question_type),
+      maxPoints: Number(row.max_points ?? 1),
       options: [],
     };
 
@@ -94,9 +104,246 @@ function groupQuestions(rows: AssignmentQuestionRow[]) {
   return Array.from(byId.values()).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+function clampScore(value: number): number {
+  if (!Number.isFinite(value)) return 50;
+  return Math.max(0, Math.min(100, value));
+}
+
+function normalizeAttemptScoringPolicy(raw: unknown): 'latest' | 'highest' | 'average' {
+  const p = String(raw ?? 'latest').trim().toLowerCase();
+  if (p === 'highest' || p === 'average') return p;
+  return 'latest';
+}
+
+function attemptScoringPolicyLabel(policy: 'latest' | 'highest' | 'average'): string {
+  if (policy === 'highest') return 'Highest Score Saved';
+  if (policy === 'average') return 'Average Score Saved';
+  return 'Most Recent Score Saved';
+}
+
+function computeUnderstandingFromAttemptPercentages(percentages: number[]): number | null {
+  if (!percentages.length) return null;
+  const clean = percentages.filter((p) => Number.isFinite(p));
+  if (!clean.length) return null;
+  if (clean.length === 1) return clampScore(clean[0]);
+  const first = clean[0];
+  const latest = clean[clean.length - 1];
+  const growth = latest - first;
+  // Growth-focused understanding: improvement across attempts weighs more than raw latest score.
+  const score = (0.6 * (50 + growth)) + (0.4 * latest);
+  return clampScore(score);
+}
+
+async function upsertWeeklyMetrics(studentId: number, classId: number): Promise<void> {
+  const weekRes = await query(
+    `SELECT
+       DATE_TRUNC('week', NOW())::date AS week_start_date,
+       (DATE_TRUNC('week', NOW()) + INTERVAL '6 days')::date AS week_end_date,
+       EXTRACT(WEEK FROM NOW())::int AS week_number`
+  );
+  const week = weekRes.rows[0] as {
+    week_start_date: string;
+    week_end_date: string;
+    week_number: number;
+  };
+
+  const aggRes = await query(
+    `SELECT
+       AVG(sg.percentage) AS accuracy_score,
+       AVG(COALESCE(sg.ai_dependency_score, 50)) AS ai_dependency_score,
+       AVG(COALESCE(sg.understanding_score, sg.percentage)) AS understanding_score,
+       AVG(COALESCE(sg.engagement_score, sg.percentage)) AS engagement_score
+     FROM student_grades sg
+     JOIN assignments a ON a.assignment_id = sg.assignment_id
+     WHERE sg.student_id = $1
+       AND a.class_id = $2
+       AND sg.submission_date >= $3::date
+       AND sg.submission_date < ($3::date + INTERVAL '7 days')`,
+    [studentId, classId, week.week_start_date]
+  );
+  const agg = aggRes.rows[0] as {
+    accuracy_score: number | null;
+    ai_dependency_score: number | null;
+    understanding_score: number | null;
+    engagement_score: number | null;
+  };
+
+  await query(
+    `INSERT INTO student_metrics (
+       student_id,
+       class_id,
+       week_number,
+       week_start_date,
+       week_end_date,
+       accuracy_score,
+       understanding_score,
+       ai_dependency_score,
+       engagement_score
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (student_id, class_id, week_number)
+     DO UPDATE SET
+       week_start_date = EXCLUDED.week_start_date,
+       week_end_date = EXCLUDED.week_end_date,
+       accuracy_score = EXCLUDED.accuracy_score,
+       understanding_score = EXCLUDED.understanding_score,
+       ai_dependency_score = EXCLUDED.ai_dependency_score,
+       engagement_score = EXCLUDED.engagement_score`,
+    [
+      studentId,
+      classId,
+      week.week_number,
+      week.week_start_date,
+      week.week_end_date,
+      agg.accuracy_score,
+      agg.understanding_score,
+      agg.ai_dependency_score,
+      agg.engagement_score,
+    ]
+  );
+}
+
+async function recomputeAndPersistAggregateGrade(
+  studentId: number,
+  assignmentId: number,
+  policyRaw: unknown
+): Promise<{
+  pointsEarned: number | null;
+  percentage: number | null;
+  letterGrade: string | null;
+  understandingScore: number | null;
+  aiDependencyScore: number | null;
+  engagementScore: number | null;
+}> {
+  const policy = normalizeAttemptScoringPolicy(policyRaw);
+  const attemptsRes = await query(
+    `SELECT
+       attempt_number,
+       points_earned,
+       percentage,
+       letter_grade,
+       understanding_score,
+       ai_dependency_score,
+       engagement_score
+     FROM student_assignment_attempt_grades
+     WHERE student_id = $1 AND assignment_id = $2
+     ORDER BY attempt_number ASC`,
+    [studentId, assignmentId]
+  );
+  const attempts = attemptsRes.rows as Array<{
+    attempt_number: number;
+    points_earned: number | null;
+    percentage: number | null;
+    letter_grade: string | null;
+    understanding_score: number | null;
+    ai_dependency_score: number | null;
+    engagement_score: number | null;
+  }>;
+
+  if (attempts.length === 0) {
+    return {
+      pointsEarned: null,
+      percentage: null,
+      letterGrade: null,
+      understandingScore: null,
+      aiDependencyScore: null,
+      engagementScore: null,
+    };
+  }
+
+  const avg = (vals: Array<number | null | undefined>) => {
+    const nums = vals.filter((v): v is number => v != null && Number.isFinite(Number(v))).map(Number);
+    if (nums.length === 0) return null;
+    return Number((nums.reduce((s, n) => s + n, 0) / nums.length).toFixed(2));
+  };
+
+  let chosen = attempts[attempts.length - 1];
+  if (policy === 'highest') {
+    chosen = [...attempts].sort((a, b) => {
+      const ap = a.percentage == null ? -1 : Number(a.percentage);
+      const bp = b.percentage == null ? -1 : Number(b.percentage);
+      if (bp !== ap) return bp - ap;
+      return Number(b.attempt_number) - Number(a.attempt_number);
+    })[0];
+  }
+
+  let keptAttemptNumber = chosen.attempt_number;
+  if (policy === 'average') {
+    keptAttemptNumber = attempts[attempts.length - 1].attempt_number;
+  }
+  await query(
+    `UPDATE student_assignment_attempt_grades
+     SET is_kept = FALSE
+     WHERE student_id = $1 AND assignment_id = $2`,
+    [studentId, assignmentId]
+  );
+  await query(
+    `UPDATE student_assignment_attempt_grades
+     SET is_kept = TRUE
+     WHERE student_id = $1 AND assignment_id = $2 AND attempt_number = $3`,
+    [studentId, assignmentId, keptAttemptNumber]
+  );
+
+  const aggregate =
+    policy === 'average'
+      ? {
+          pointsEarned: avg(attempts.map((a) => a.points_earned)),
+          percentage: avg(attempts.map((a) => a.percentage)),
+          understandingScore: avg(attempts.map((a) => a.understanding_score)),
+          aiDependencyScore: avg(attempts.map((a) => a.ai_dependency_score)),
+          engagementScore: avg(attempts.map((a) => a.engagement_score)),
+        }
+      : {
+          pointsEarned: chosen.points_earned == null ? null : Number(chosen.points_earned),
+          percentage: chosen.percentage == null ? null : Number(chosen.percentage),
+          understandingScore: chosen.understanding_score == null ? null : Number(chosen.understanding_score),
+          aiDependencyScore: chosen.ai_dependency_score == null ? null : Number(chosen.ai_dependency_score),
+          engagementScore: chosen.engagement_score == null ? null : Number(chosen.engagement_score),
+        };
+
+  const letterGrade = aggregate.percentage == null ? null : toLetterGrade(Number(aggregate.percentage));
+  const submissionAttempts = attempts.length;
+
+  await query(
+    `UPDATE student_grades
+     SET points_earned = $1,
+         percentage = $2,
+         letter_grade = $3,
+         understanding_score = $4,
+         ai_dependency_score = $5,
+         engagement_score = $6,
+         submission_date = NOW(),
+         graded_date = NOW(),
+         submission_attempts = $7
+     WHERE student_id = $8 AND assignment_id = $9`,
+    [
+      aggregate.pointsEarned,
+      aggregate.percentage,
+      letterGrade,
+      aggregate.understandingScore,
+      aggregate.aiDependencyScore,
+      aggregate.engagementScore,
+      submissionAttempts,
+      studentId,
+      assignmentId,
+    ]
+  );
+
+  return {
+    pointsEarned: aggregate.pointsEarned,
+    percentage: aggregate.percentage,
+    letterGrade,
+    understandingScore: aggregate.understandingScore,
+    aiDependencyScore: aggregate.aiDependencyScore,
+    engagementScore: aggregate.engagementScore,
+  };
+}
+
 async function ensureStudentCanAccess(studentId: number, classId: number, assignmentId: number) {
   const assignmentRes = await query(
-    `SELECT assignment_id, class_id, assignment_name, description, type, max_points, due_date, allowed_submissions, ai_params, pdf_summary
+    `SELECT assignment_id, class_id, assignment_name, description, type, max_points, due_date, allowed_submissions,
+            COALESCE(keep_type, attempt_scoring_policy) AS keep_type,
+            allow_partial_short_answer, allow_partial_select_all_that_apply,
+            ai_params, pdf_summary
      FROM assignments
      WHERE assignment_id = $1 AND class_id = $2`,
     [assignmentId, classId]
@@ -117,6 +364,14 @@ async function ensureStudentCanAccess(studentId: number, classId: number, assign
     return { ok: false as const, status: 403, error: 'You are not enrolled in this class' };
   }
 
+  if (isPastDue(assignmentRes.rows[0]?.due_date as string | null | undefined)) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: 'This assignment can no longer be completed because the due date has passed.',
+    };
+  }
+
   return { ok: true as const, assignment: assignmentRes.rows[0] as {
     assignment_id: number;
     class_id: number;
@@ -126,6 +381,9 @@ async function ensureStudentCanAccess(studentId: number, classId: number, assign
     max_points: number;
     due_date: string | null;
     allowed_submissions: number;
+    keep_type: string | null;
+    allow_partial_short_answer: boolean;
+    allow_partial_select_all_that_apply: boolean;
     ai_params: string | null;
     pdf_summary: string | null;
   } };
@@ -147,7 +405,7 @@ router.get('/assignments/:classId/:assignmentId', requireStudentAuth, async (req
     }
 
     const questionsRes = await query(
-      `SELECT q.question_id, q.sort_order, q.question_text, q.question_type,
+      `SELECT q.question_id, q.sort_order, q.question_text, q.question_type, q.max_points,
               o.option_id, o.option_text, o.is_correct
        FROM assignment_questions q
        LEFT JOIN assignment_question_options o ON o.question_id = q.question_id
@@ -176,6 +434,36 @@ router.get('/assignments/:classId/:assignmentId', requireStudentAuth, async (req
 
     const attemptsUsed = grade?.submission_attempts ?? 0;
     const allowedSubmissions = Math.max(1, Number(access.assignment.allowed_submissions ?? 1));
+    const attemptScoringPolicy = normalizeAttemptScoringPolicy(access.assignment.keep_type);
+
+    const attemptGradesRes = await query(
+      `SELECT
+         attempt_number,
+         points_earned,
+         percentage,
+         letter_grade,
+         submission_date,
+         is_kept
+       FROM student_assignment_attempt_grades
+       WHERE student_id = $1 AND assignment_id = $2
+       ORDER BY attempt_number ASC`,
+      [studentId, assignmentId]
+    );
+    const attemptGrades = (attemptGradesRes.rows as Array<{
+      attempt_number: number;
+      points_earned: number | null;
+      percentage: number | null;
+      letter_grade: string | null;
+      submission_date: string | null;
+      is_kept: boolean;
+    }>).map((a) => ({
+      attemptNumber: Number(a.attempt_number),
+      pointsEarned: a.points_earned == null ? null : Number(a.points_earned),
+      percentage: a.percentage == null ? null : Number(a.percentage),
+      letterGrade: a.letter_grade ?? null,
+      submissionDate: a.submission_date ?? null,
+      isKept: Boolean(a.is_kept),
+    }));
 
     return res.json({
       success: true,
@@ -188,6 +476,8 @@ router.get('/assignments/:classId/:assignmentId', requireStudentAuth, async (req
         maxPoints: access.assignment.max_points,
         dueDate: access.assignment.due_date,
         allowedSubmissions,
+        attemptScoringPolicy,
+        attemptScoringPolicyLabel: attemptScoringPolicyLabel(attemptScoringPolicy),
         aiInstructions: access.assignment.ai_params,
         pdfSummary: access.assignment.pdf_summary,
       },
@@ -205,6 +495,7 @@ router.get('/assignments/:classId/:assignmentId', requireStudentAuth, async (req
         attemptsUsed,
         attemptsRemaining: Math.max(0, allowedSubmissions - attemptsUsed),
         canSubmit: attemptsUsed < allowedSubmissions,
+        attempts: attemptGrades,
       },
       grade: grade
         ? {
@@ -246,13 +537,14 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
     );
     const attemptsUsed = Number(existingGradeRes.rows[0]?.submission_attempts ?? 0);
     const allowedSubmissions = Math.max(1, Number(access.assignment.allowed_submissions ?? 1));
+    const attemptScoringPolicy = normalizeAttemptScoringPolicy(access.assignment.keep_type);
 
     if (attemptsUsed >= allowedSubmissions) {
       return res.status(409).json({ success: false, error: 'No submissions remaining for this assignment' });
     }
 
     const questionsRes = await query(
-      `SELECT q.question_id, q.sort_order, q.question_text, q.question_type,
+      `SELECT q.question_id, q.sort_order, q.question_text, q.question_type, q.max_points,
               o.option_id, o.option_text, o.is_correct
        FROM assignment_questions q
        LEFT JOIN assignment_question_options o ON o.question_id = q.question_id
@@ -276,8 +568,10 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
       answerByQuestionId.set(questionId, { selectedOptionIds, responseText });
     }
 
-    let objectiveTotal = 0;
-    let objectiveCorrect = 0;
+    let possiblePointsTotal = 0;
+    let earnedPointsTotal = 0;
+    const allowPartialShortAnswer = Boolean(access.assignment.allow_partial_short_answer);
+    const allowPartialSata = Boolean(access.assignment.allow_partial_select_all_that_apply);
 
     const attemptNumber = attemptsUsed + 1;
     const questionResults: { questionId: number; isCorrect: number | null }[] = [];
@@ -285,51 +579,65 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
     for (const q of groupedQuestions) {
       const studentAnswer = answerByQuestionId.get(q.questionId) ?? { selectedOptionIds: [], responseText: '' };
       let isCorrect: number | null = null;
+      let correctnessScore = 0;
       const type = normalizeType(q.questionType);
+      const questionMaxPoints = Math.max(0, Number(q.maxPoints ?? 1));
+      possiblePointsTotal += questionMaxPoints;
 
       if (type === 'short_answer') {
-        objectiveTotal += 1;
         const expectedAnswer = q.options.find((o) => o.is_correct === 1)?.option_text?.trim() || '';
         const studentResponse = studentAnswer.responseText.trim();
 
         if (!studentResponse) {
-          isCorrect = 0;
+          correctnessScore = 0;
         } else if (groq) {
           try {
+            const gradingInstruction = allowPartialShortAnswer
+              ? 'Reply with only one number from 0.00 to 1.00 representing fractional correctness (0 = incorrect, 1 = fully correct).'
+              : 'Reply with only "1" for correct or "0" for incorrect.';
             const completion = await groq.chat.completions.create({
               model: GROQ_MODEL,
               messages: [{
                 role: 'user',
-                content: `You are grading a short answer question. Be reasonably lenient — accept answers that demonstrate correct understanding even if worded differently.\n\nQuestion: "${q.questionText}"\nExpected answer: "${expectedAnswer}"\nStudent's answer: "${studentResponse}"\n\nIs the student's answer correct or acceptably close to the expected answer? Reply with only "1" for correct or "0" for incorrect.`,
+                content: `You are grading a short answer question. Be reasonably lenient and focus on demonstrated understanding.\n\nQuestion: "${q.questionText}"\nExpected answer: "${expectedAnswer}"\nStudent's answer: "${studentResponse}"\nPartial credit allowed: ${allowPartialShortAnswer ? 'yes' : 'no'}\n\n${gradingInstruction}`,
               }],
               max_tokens: 5,
             });
             const result = completion.choices[0]?.message?.content?.trim();
-            isCorrect = result === '1' ? 1 : 0;
+            if (allowPartialShortAnswer) {
+              const parsed = Number(result);
+              correctnessScore = Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0;
+            } else {
+              correctnessScore = result === '1' ? 1 : 0;
+            }
           } catch {
             // Fallback to case-insensitive string match if AI fails
-            isCorrect = studentResponse.toLowerCase() === expectedAnswer.toLowerCase() ? 1 : 0;
+            correctnessScore = studentResponse.toLowerCase() === expectedAnswer.toLowerCase() ? 1 : 0;
           }
         } else {
           // No AI available — fall back to simple string comparison
-          isCorrect = studentResponse.toLowerCase() === expectedAnswer.toLowerCase() ? 1 : 0;
+          correctnessScore = studentResponse.toLowerCase() === expectedAnswer.toLowerCase() ? 1 : 0;
         }
-
-        if (isCorrect === 1) objectiveCorrect += 1;
       } else {
-        objectiveTotal += 1;
-
         const selected = new Set(studentAnswer.selectedOptionIds);
         const correct = new Set(q.options.filter((o) => o.is_correct === 1).map((o) => Number(o.option_id)));
 
         if (type === 'select_all_that_apply') {
-          isCorrect = selected.size === correct.size && Array.from(correct).every((id) => selected.has(id)) ? 1 : 0;
+          if (allowPartialSata) {
+            const correctSelected = Array.from(correct).filter((id) => selected.has(id)).length;
+            const incorrectSelected = Array.from(selected).filter((id) => !correct.has(id)).length;
+            const denom = Math.max(1, correct.size);
+            correctnessScore = Math.max(0, Math.min(1, (correctSelected - incorrectSelected) / denom));
+          } else {
+            correctnessScore = selected.size === correct.size && Array.from(correct).every((id) => selected.has(id)) ? 1 : 0;
+          }
         } else {
-          isCorrect = selected.size === 1 && correct.size === 1 && selected.has(Array.from(correct)[0]) ? 1 : 0;
+          correctnessScore = selected.size === 1 && correct.size === 1 && selected.has(Array.from(correct)[0]) ? 1 : 0;
         }
-
-        if (isCorrect === 1) objectiveCorrect += 1;
       }
+      isCorrect = correctnessScore >= 0.999 ? 1 : 0;
+      const questionPointsEarned = Number((questionMaxPoints * correctnessScore).toFixed(2));
+      earnedPointsTotal += questionPointsEarned;
 
       questionResults.push({ questionId: q.questionId, isCorrect });
 
@@ -341,8 +649,10 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
           attempt_number,
           response_text,
           selected_option_ids,
-          is_correct
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          is_correct,
+          correctness_score,
+          points_earned
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           studentId,
           assignmentId,
@@ -351,13 +661,17 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
           studentAnswer.responseText || null,
           studentAnswer.selectedOptionIds.length ? studentAnswer.selectedOptionIds.join(',') : null,
           isCorrect,
+          correctnessScore,
+          questionPointsEarned,
         ]
       );
     }
 
-    const percentage = objectiveTotal > 0 ? Number(((objectiveCorrect / objectiveTotal) * 100).toFixed(2)) : null;
+    const assignmentMaxPoints = Math.max(1, Number(access.assignment.max_points ?? 100));
+    const scoringDenominator = possiblePointsTotal > 0 ? possiblePointsTotal : assignmentMaxPoints;
+    const percentage = scoringDenominator > 0 ? Number(((earnedPointsTotal / scoringDenominator) * 100).toFixed(2)) : null;
     const pointsEarned = percentage != null
-      ? Number(((Number(access.assignment.max_points) * percentage) / 100).toFixed(2))
+      ? Number(((assignmentMaxPoints * percentage) / 100).toFixed(2))
       : null;
     const letterGrade = percentage != null ? toLetterGrade(percentage) : null;
 
@@ -383,78 +697,117 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
       [studentId, assignmentId, pointsEarned, percentage, letterGrade, attemptNumber]
     );
 
+    await query(
+      `INSERT INTO student_assignment_attempt_grades (
+        student_id,
+        assignment_id,
+        attempt_number,
+        points_earned,
+        percentage,
+        letter_grade,
+        is_kept,
+        submission_date,
+        graded_date
+      ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, NOW(), NOW())
+      ON CONFLICT (student_id, assignment_id, attempt_number)
+      DO UPDATE SET
+        points_earned = EXCLUDED.points_earned,
+        percentage = EXCLUDED.percentage,
+        letter_grade = EXCLUDED.letter_grade,
+        submission_date = EXCLUDED.submission_date,
+        graded_date = EXCLUDED.graded_date`,
+      [studentId, assignmentId, attemptNumber, pointsEarned, percentage, letterGrade]
+    );
+
     // Calculate metrics
     let understandingScore: number | null = null;
-    let aiDependencyScore: number | null = null;
-    let engagementScore: number | null = null; // For now, set to percentage or something
+    let aiDependencyScore: number | null = 50; // neutral fallback
+    let engagementScore: number | null = null;
 
-    // Get AI usage count in last 7 days
-    const aiUsageRes = await query(
-      `SELECT COUNT(*) as count FROM ai_usage_logs
-       WHERE student_id = $1 AND action = 'chat' AND timestamp > NOW() - INTERVAL '7 days'`,
-      [studentId]
-    );
-    const aiUsageCount = Number(aiUsageRes.rows[0]?.count || 0);
-    aiDependencyScore = Math.min(aiUsageCount * 10, 100); // Arbitrary scaling
-
-    // Calculate understanding based on answers
-    if (groq) {
-      const responsesRes = await query(
-        `SELECT r.response_text, r.selected_option_ids, r.is_correct, q.question_text, q.question_type
-         FROM student_assignment_responses r
-         JOIN assignment_questions q ON q.question_id = r.question_id
-         WHERE r.student_id = $1 AND r.assignment_id = $2 AND r.attempt_number = $3
-         ORDER BY q.sort_order`,
+    // AI dependency score from full chat transcript snapshot for this attempt.
+    try {
+      const transcriptRes = await query(
+        `SELECT role, content
+         FROM student_chat_messages
+         WHERE student_id = $1 AND assignment_id = $2 AND attempt_number = $3
+         ORDER BY created_at ASC`,
         [studentId, assignmentId, attemptNumber]
       );
 
-      if (responsesRes.rows.length > 0) {
-        const qaText = responsesRes.rows.map((row: any) => {
-          const question = row.question_text;
-          const answer = row.response_text || row.selected_option_ids || 'No answer';
-          const correct = row.is_correct === 1 ? 'Correct' : 'Incorrect';
-          return `Question: ${question}\nStudent Answer: ${answer}\nCorrectness: ${correct}`;
-        }).join('\n\n');
+      if (groq && transcriptRes.rows.length > 0) {
+        const transcriptText = transcriptRes.rows
+          .map((r) => `${String(r.role || 'unknown').toUpperCase()}: ${String(r.content || '')}`)
+          .join('\n');
 
-        const prompt = `You are an AI evaluator for student understanding in a learning management system.
+        const scoringPrompt = `You are grading AI dependency in a student LMS context.
+Return ONLY one number from 0 to 100 where:
+- 0 = fully independent
+- 100 = completely dependent on AI
 
-Based on the following questions and student answers, provide an understanding score from 0 to 100, where 100 means perfect understanding and 0 means no understanding.
+Score based on:
+1) Whether the student asks for direct answers vs guidance
+2) Whether they iterate critically vs copy/paste
+3) How much the final work appears AI-generated
+4) Whether requests are clarifying questions vs answer-dumping requests
 
-Consider:
-- Accuracy of answers
-- Depth of responses for open-ended questions
-- Conceptual understanding demonstrated
+Student assignment transcript:
+${transcriptText}`;
 
-Output only the number (0-100).
-
-Questions and Answers:
-${qaText}`;
-
-        try {
-          const completion = await groq.chat.completions.create({
-            model: GROQ_MODEL,
-            messages: [{ role: 'user', content: prompt }],
-          });
-          const scoreText = completion.choices[0]?.message?.content?.trim();
-          const score = parseFloat(scoreText || '0');
-          understandingScore = isNaN(score) ? null : Math.max(0, Math.min(100, score));
-        } catch (err) {
-          console.error('Error calculating understanding score:', err);
-        }
+        const depCompletion = await groq.chat.completions.create({
+          model: GROQ_MODEL,
+          messages: [{ role: 'user', content: scoringPrompt }],
+          max_tokens: 8,
+        });
+        const depText = depCompletion.choices[0]?.message?.content?.trim() || '50';
+        aiDependencyScore = clampScore(parseFloat(depText));
+      }
+    } catch (err) {
+      console.error('AI dependency scoring failed; defaulting to neutral score:', err);
+      aiDependencyScore = 50;
+    } finally {
+      // Always clear temporary transcript rows for this attempt.
+      try {
+        await query(
+          `DELETE FROM student_chat_messages
+           WHERE student_id = $1 AND assignment_id = $2 AND attempt_number = $3`,
+          [studentId, assignmentId, attemptNumber]
+        );
+      } catch (cleanupErr) {
+        console.error('Failed to clean temporary student_chat_messages rows:', cleanupErr);
       }
     }
 
-    engagementScore = percentage; // For now, use the grade percentage
-
-    // Update the metrics
-    await query(
-      `UPDATE student_grades SET
-        understanding_score = $1,
-        ai_dependency_score = $2,
-        engagement_score = $3
-       WHERE student_id = $4 AND assignment_id = $5`,
-      [understandingScore, aiDependencyScore, engagementScore, studentId, assignmentId]
+    const attemptPercentagesRes = await query(
+      `SELECT percentage
+       FROM student_assignment_attempt_grades
+       WHERE student_id = $1 AND assignment_id = $2
+       ORDER BY attempt_number ASC`,
+      [studentId, assignmentId]
     );
+    const attemptPercentages = (attemptPercentagesRes.rows as Array<{ percentage: number | null }>)
+      .map((r) => (r.percentage == null ? null : Number(r.percentage)))
+      .filter((p): p is number => p != null && Number.isFinite(p));
+    understandingScore = computeUnderstandingFromAttemptPercentages(attemptPercentages);
+
+    engagementScore = percentage; // placeholder existing behavior
+
+    await query(
+      `UPDATE student_assignment_attempt_grades
+       SET understanding_score = $1,
+           ai_dependency_score = $2,
+           engagement_score = $3
+       WHERE student_id = $4 AND assignment_id = $5 AND attempt_number = $6`,
+      [understandingScore, aiDependencyScore, engagementScore, studentId, assignmentId, attemptNumber]
+    );
+
+    const aggregateGrade = await recomputeAndPersistAggregateGrade(
+      studentId,
+      assignmentId,
+      attemptScoringPolicy
+    );
+
+    // Keep weekly metrics fresh per submit (per student, per class, current week).
+    await upsertWeeklyMetrics(studentId, classId);
 
     return res.json({
       success: true,
@@ -463,12 +816,12 @@ ${qaText}`;
         attemptsRemaining: Math.max(0, allowedSubmissions - attemptNumber),
       },
       grade: {
-        pointsEarned,
-        percentage,
-        letterGrade,
-        understandingScore,
-        aiDependencyScore,
-        engagementScore,
+        pointsEarned: aggregateGrade.pointsEarned,
+        percentage: aggregateGrade.percentage,
+        letterGrade: aggregateGrade.letterGrade,
+        understandingScore: aggregateGrade.understandingScore,
+        aiDependencyScore: aggregateGrade.aiDependencyScore,
+        engagementScore: aggregateGrade.engagementScore,
       },
       questionResults,
     });

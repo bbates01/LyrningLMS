@@ -37,7 +37,20 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
         {/* Header */}
         <header className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between min-h-0">
           <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-            <img src="/img/long-logo.png" alt="Lyrning" className="h-12 sm:h-16 md:h-20 w-auto object-contain object-left flex-shrink-0" />
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedClass) {
+                  onViewChange('ASSIGNMENT_LIST');
+                } else {
+                  onBackToClasses();
+                }
+              }}
+              className="flex-shrink-0"
+              aria-label="Go to assignments"
+            >
+              <img src="/img/long-logo.png" alt="Lyrning" className="h-12 sm:h-16 md:h-20 w-auto object-contain object-left" />
+            </button>
             <div className="h-6 w-[1px] bg-gray-300 mx-1 flex-shrink-0"></div>
             <span className="text-gray-600 font-medium truncate">
               {isClassSelect
@@ -85,6 +98,13 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
           <nav className="bg-gray-50 border-b border-gray-100 flex justify-start px-4 sm:px-6 lg:px-8 py-2 gap-1 overflow-x-auto">
             <button
               type="button"
+              onClick={onBackToClasses}
+              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors text-gray-600 hover:text-black hover:bg-white/70"
+            >
+              Classes
+            </button>
+            <button
+              type="button"
               onClick={() => onViewChange('ASSIGNMENT_LIST')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 currentView === 'ASSIGNMENT_LIST' || currentView === 'ASSIGNMENT_EDIT' || currentView === 'ASSIGNMENT_VIEW' || currentView === 'ASSIGNMENT_CREATE_SUCCESS'
@@ -93,6 +113,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
               }`}
             >
               Assignments
+            </button>
+            <button
+              type="button"
+              onClick={() => onViewChange('CLASS_INFO')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                currentView === 'CLASS_INFO'
+                  ? 'bg-white text-black shadow-sm border border-gray-200'
+                  : 'text-gray-600 hover:text-black hover:bg-white/70'
+              }`}
+            >
+              Class Info
             </button>
             <button
               type="button"
@@ -107,14 +138,14 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, on
             </button>
             <button
               type="button"
-              onClick={() => onViewChange('CLASS_INFO')}
+              onClick={() => onViewChange('METRICS')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                currentView === 'CLASS_INFO'
+                currentView === 'METRICS'
                   ? 'bg-white text-black shadow-sm border border-gray-200'
                   : 'text-gray-600 hover:text-black hover:bg-white/70'
               }`}
             >
-              Class Info
+              Metrics
             </button>
           </nav>
         )}

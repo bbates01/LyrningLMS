@@ -67,6 +67,34 @@ async function main() {
         console.log('Migrating: adding assignments.allowed_submissions');
         await pool.query('ALTER TABLE assignments ADD COLUMN allowed_submissions INTEGER NOT NULL DEFAULT 1;');
       }
+      const hasAttemptScoringPolicy = await columnExists('assignments', 'attempt_scoring_policy');
+      if (!hasAttemptScoringPolicy) {
+        console.log('Migrating: adding assignments.attempt_scoring_policy');
+        await pool.query(`ALTER TABLE assignments ADD COLUMN attempt_scoring_policy TEXT NOT NULL DEFAULT 'latest';`);
+      }
+      const hasKeepType = await columnExists('assignments', 'keep_type');
+      if (!hasKeepType) {
+        console.log('Migrating: adding assignments.keep_type');
+        await pool.query(`ALTER TABLE assignments ADD COLUMN keep_type TEXT NOT NULL DEFAULT 'latest';`);
+        await pool.query(`UPDATE assignments SET keep_type = COALESCE(NULLIF(attempt_scoring_policy, ''), 'latest');`);
+      }
+      const hasPartialShort = await columnExists('assignments', 'allow_partial_short_answer');
+      if (!hasPartialShort) {
+        console.log('Migrating: adding assignments.allow_partial_short_answer');
+        await pool.query(`ALTER TABLE assignments ADD COLUMN allow_partial_short_answer BOOLEAN NOT NULL DEFAULT FALSE;`);
+      }
+      const hasPartialSata = await columnExists('assignments', 'allow_partial_select_all_that_apply');
+      if (!hasPartialSata) {
+        console.log('Migrating: adding assignments.allow_partial_select_all_that_apply');
+        await pool.query(`ALTER TABLE assignments ADD COLUMN allow_partial_select_all_that_apply BOOLEAN NOT NULL DEFAULT FALSE;`);
+      }
+    }
+    if (await tableExists('assignment_questions')) {
+      const hasQuestionMaxPoints = await columnExists('assignment_questions', 'max_points');
+      if (!hasQuestionMaxPoints) {
+        console.log('Migrating: adding assignment_questions.max_points');
+        await pool.query('ALTER TABLE assignment_questions ADD COLUMN max_points REAL NOT NULL DEFAULT 1;');
+      }
     }
 
     if (await tableExists('student_grades')) {
@@ -89,12 +117,56 @@ async function main() {
           response_text TEXT,
           selected_option_ids TEXT,
           is_correct INTEGER,
+          correctness_score REAL,
+          points_earned REAL,
           submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );`
       );
       await pool.query(
         'CREATE INDEX IF NOT EXISTS idx_assignment_responses_student_assignment ON student_assignment_responses(student_id, assignment_id);'
       );
+    }
+    if (await tableExists('student_assignment_responses')) {
+      const hasCorrectnessScore = await columnExists('student_assignment_responses', 'correctness_score');
+      if (!hasCorrectnessScore) {
+        console.log('Migrating: adding student_assignment_responses.correctness_score');
+        await pool.query('ALTER TABLE student_assignment_responses ADD COLUMN correctness_score REAL;');
+      }
+      const hasResponsePointsEarned = await columnExists('student_assignment_responses', 'points_earned');
+      if (!hasResponsePointsEarned) {
+        console.log('Migrating: adding student_assignment_responses.points_earned');
+        await pool.query('ALTER TABLE student_assignment_responses ADD COLUMN points_earned REAL;');
+      }
+    }
+
+    if (!(await tableExists('student_assignment_attempt_grades'))) {
+      console.log('Migrating: creating student_assignment_attempt_grades');
+      await pool.query(
+        `CREATE TABLE student_assignment_attempt_grades (
+          student_id BIGINT NOT NULL REFERENCES students(student_id),
+          assignment_id BIGINT NOT NULL REFERENCES assignments(assignment_id) ON DELETE CASCADE,
+          attempt_number INTEGER NOT NULL,
+          points_earned REAL,
+          percentage REAL,
+          letter_grade TEXT,
+          understanding_score REAL,
+          ai_dependency_score REAL,
+          engagement_score REAL,
+          submission_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          graded_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (student_id, assignment_id, attempt_number)
+        );`
+      );
+      await pool.query(
+        'CREATE INDEX IF NOT EXISTS idx_attempt_grades_student_assignment ON student_assignment_attempt_grades(student_id, assignment_id, attempt_number);'
+      );
+    }
+    if (await tableExists('student_assignment_attempt_grades')) {
+      const hasIsKept = await columnExists('student_assignment_attempt_grades', 'is_kept');
+      if (!hasIsKept) {
+        console.log('Migrating: adding student_assignment_attempt_grades.is_kept');
+        await pool.query('ALTER TABLE student_assignment_attempt_grades ADD COLUMN is_kept BOOLEAN NOT NULL DEFAULT FALSE;');
+      }
     }
 
     console.log('Postgres DB already initialized');

@@ -31,18 +31,39 @@ router.post('/chat', async (req: express.Request, res: express.Response) => {
       history?: { role: string; content: string }[];
       instructions?: string;
       studentId?: number;
+      assignmentId?: number;
+      attemptNumber?: number;
       assignmentContext?: string;
     };
+    const assignmentId = Number((req.body as { assignmentId?: unknown })?.assignmentId);
+    const attemptNumber = Number((req.body as { attemptNumber?: unknown })?.attemptNumber);
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ success: false, error: 'message is required' });
+    }
+
+    const hasChatSessionKeys =
+      Number.isFinite(Number(studentId)) &&
+      Number(studentId) > 0 &&
+      Number.isFinite(assignmentId) &&
+      assignmentId > 0 &&
+      Number.isFinite(attemptNumber) &&
+      attemptNumber > 0;
+
+    // Persist each new student message before forwarding to the AI.
+    if (hasChatSessionKeys) {
+      await query(
+        `INSERT INTO student_chat_messages (student_id, assignment_id, attempt_number, role, content)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [Number(studentId), assignmentId, attemptNumber, 'user', message]
+      );
     }
 
     // Log AI usage if studentId provided
     if (studentId && Number.isFinite(studentId)) {
       await query(
         `INSERT INTO ai_usage_logs (student_id, action, details) VALUES ($1, $2, $3)`,
-        [studentId, 'chat', { messageLength: message.length, historyLength: history.length }]
+        [studentId, 'chat', { messageLength: message.length, historyLength: history.length, assignmentId, attemptNumber }]
       );
     }
 
@@ -66,6 +87,16 @@ ${assignmentContext ? `\nHere is the assignment context to help you assist the s
     });
 
     const text = completion.choices[0]?.message?.content ?? "I'm having trouble thinking right now. Could you rephrase that?";
+
+    // Persist tutor response for the current session snapshot.
+    if (hasChatSessionKeys) {
+      await query(
+        `INSERT INTO student_chat_messages (student_id, assignment_id, attempt_number, role, content)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [Number(studentId), assignmentId, attemptNumber, 'assistant', text]
+      );
+    }
+
     return res.json({ success: true, text });
   } catch (err) {
     console.error('Groq chat error:', err);

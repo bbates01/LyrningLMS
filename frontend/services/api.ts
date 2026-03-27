@@ -42,10 +42,65 @@ export async function fetchTeacherClasses(teacherId: number): Promise<any[]> {
   return res.json();
 }
 
+export async function createTeacherClass(
+  teacherId: number,
+  payload: {
+    className: string;
+    subjectCode: string;
+    semester?: string;
+    period?: string;
+    roomNumber?: string;
+    classCode?: string;
+  }
+): Promise<{ success: boolean; class?: any; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/classes/teacher/${teacherId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) return { success: false, error: data?.error || 'Failed to create class' };
+  return { success: true, class: data.class };
+}
+
 export async function fetchClassDetails(classId: number): Promise<any> {
   const res = await fetch(`${API_BASE}/api/classes/${classId}`);
   if (!res.ok) throw new Error('Failed to fetch class');
   return res.json();
+}
+
+export async function updateClass(
+  classId: number,
+  payload: {
+    teacherId: number;
+    className: string;
+    subjectCode: string;
+    semester?: string;
+    period?: string;
+    roomNumber?: string;
+    classCode?: string;
+  }
+): Promise<{ success: boolean; class?: any; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) return { success: false, error: data?.error || 'Failed to update class' };
+  return { success: true, class: data.class };
+}
+
+export async function deleteClass(
+  classId: number,
+  teacherId: number
+): Promise<{ success: boolean; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}?teacherId=${encodeURIComponent(String(teacherId))}`, {
+    method: 'DELETE',
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) return { success: false, error: data?.error || 'Failed to delete class' };
+  return { success: true };
 }
 
 export interface AssignmentRow {
@@ -58,6 +113,10 @@ export interface AssignmentRow {
   assignment_link?: string | null;
   ai_params?: string | null;
   question_types?: string | null;
+  allowed_submissions?: number;
+  attempt_scoring_policy?: 'latest' | 'highest' | 'average' | string | null;
+  allow_partial_short_answer?: boolean | null;
+  allow_partial_select_all_that_apply?: boolean | null;
 }
 
 export async function fetchClassAssignments(classId: number): Promise<AssignmentRow[]> {
@@ -103,10 +162,15 @@ export async function createAssignment(
   classId: number,
   teacherId: number,
   assignmentName: string,
+  dueDate: string,
   description?: string,
   aiParams?: string,
   questionTypes?: string[],
+  maxPoints?: number,
   allowedSubmissions?: number,
+  attemptScoringPolicy?: 'latest' | 'highest' | 'average',
+  allowPartialShortAnswer?: boolean,
+  allowPartialSelectAllThatApply?: boolean,
   assignmentType?: string,
   pdfSummary?: string | null
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
@@ -116,11 +180,16 @@ export async function createAssignment(
     body: JSON.stringify({
       teacherId,
       assignmentName,
+      dueDate,
       description: description || '',
       aiParams: aiParams ?? null,
       questionTypes: questionTypes?.length ? questionTypes.join(',') : null,
       type: assignmentType ?? null,
+      maxPoints: typeof maxPoints === 'number' ? maxPoints : 100,
       allowedSubmissions: typeof allowedSubmissions === 'number' ? allowedSubmissions : 1,
+      attemptScoringPolicy: attemptScoringPolicy ?? 'latest',
+      allowPartialShortAnswer: Boolean(allowPartialShortAnswer),
+      allowPartialSelectAllThatApply: Boolean(allowPartialSelectAllThatApply),
       pdfSummary: pdfSummary ?? null,
     }),
   });
@@ -129,9 +198,36 @@ export async function createAssignment(
   return { success: true, assignmentId: data.assignment?.assignment_id };
 }
 
+export async function updateAssignment(
+  classId: number,
+  assignmentId: number,
+  payload: {
+    teacherId: number;
+    assignmentName: string;
+    description?: string;
+    dueDate?: string;
+    aiParams?: string;
+    maxPoints?: number;
+    allowedSubmissions?: number;
+    attemptScoringPolicy?: 'latest' | 'highest' | 'average';
+    allowPartialShortAnswer?: boolean;
+    allowPartialSelectAllThatApply?: boolean;
+  }
+): Promise<{ success: boolean; assignment?: any; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments/${assignmentId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) return { success: false, error: data?.error || 'Failed to update assignment' };
+  return { success: true, assignment: data.assignment };
+}
+
 export type SavedQuestionPayload = {
   questionText: string;
   questionType?: 'multiple_choice' | 'select_all_that_apply' | 'true_false' | 'short_answer' | string;
+  maxPoints?: number;
   correctAnswer?: string;
   correctAnswers?: string[];
   falseAnswers: string[];
@@ -140,14 +236,24 @@ export type SavedQuestionPayload = {
 export async function saveAssignmentQuestions(
   classId: number,
   assignmentId: number,
-  questions: SavedQuestionPayload[]
+  questions: SavedQuestionPayload[],
+  options?: {
+    assignmentMaxPoints?: number;
+    allowPartialShortAnswer?: boolean;
+    allowPartialSelectAllThatApply?: boolean;
+  }
 ): Promise<{ success: boolean; error?: string }> {
   const res = await fetch(
     `${API_BASE}/api/classes/${classId}/assignments/${assignmentId}/questions`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ questions }),
+      body: JSON.stringify({
+        questions,
+        assignmentMaxPoints: options?.assignmentMaxPoints,
+        allowPartialShortAnswer: options?.allowPartialShortAnswer,
+        allowPartialSelectAllThatApply: options?.allowPartialSelectAllThatApply,
+      }),
     }
   );
   const data = await res.json();
@@ -160,6 +266,7 @@ export interface AssignmentQuestionPreview {
   sortOrder: number;
   questionText: string;
   questionType?: string;
+  maxPoints?: number;
   options: { optionText: string; isCorrect: number }[];
 }
 
@@ -197,14 +304,27 @@ export interface AssignmentStudentGrade {
   percentage: number | null;
   letterGrade: string | null;
   submissionDate: string | null;
+  understandingScore?: number | null;
+  aiDependencyScore?: number | null;
 }
 
 export interface AssignmentGradeSummary {
   assignmentId: number;
   assignmentName: string;
+  description?: string | null;
+  aiParams?: string | null;
   type: string | null;
   maxPoints: number;
   dueDate: string | null;
+  allowedSubmissions?: number;
+  attemptScoringPolicy?: 'latest' | 'highest' | 'average' | string | null;
+  allowPartialShortAnswer?: boolean;
+  allowPartialSelectAllThatApply?: boolean;
+  averages?: {
+    accuracy: number | null;
+    understanding: number | null;
+    aiDependency: number | null;
+  };
   students: AssignmentStudentGrade[];
 }
 
@@ -213,6 +333,54 @@ export async function fetchClassGrades(classId: number): Promise<AssignmentGrade
   if (!res.ok) throw new Error('Failed to fetch grades');
   const data = await res.json();
   return data.assignments ?? [];
+}
+
+export interface ClassMetricStudentSummary {
+  studentId: number;
+  firstName: string;
+  lastName: string;
+  username: string;
+  currentWeek: {
+    accuracy: number | null;
+    aiDependency: number | null;
+    understanding: number | null;
+  };
+}
+
+export interface StudentMetricHistoryPoint {
+  weekNumber: number;
+  weekStartDate: string;
+  weekEndDate: string;
+  accuracy: number | null;
+  aiDependency: number | null;
+  understanding: number | null;
+}
+
+export interface StudentMetricHistoryPayload {
+  student: {
+    studentId: number;
+    firstName: string;
+    lastName: string;
+    username: string;
+  };
+  history: StudentMetricHistoryPoint[];
+}
+
+export async function fetchClassMetricStudents(classId: number): Promise<ClassMetricStudentSummary[]> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}/metrics/students`);
+  const data = await res.json();
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch metrics');
+  return data.students ?? [];
+}
+
+export async function fetchStudentMetricHistory(
+  classId: number,
+  studentId: number
+): Promise<StudentMetricHistoryPayload> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}/metrics/students/${studentId}`);
+  const data = await res.json();
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch student metrics');
+  return { student: data.student, history: data.history ?? [] };
 }
 
 export interface StudentAssignmentQuestion {
@@ -234,6 +402,8 @@ export interface StudentAssignmentPayload {
     maxPoints: number;
     dueDate: string | null;
     allowedSubmissions: number;
+    attemptScoringPolicy?: 'latest' | 'highest' | 'average';
+    attemptScoringPolicyLabel?: string;
     aiInstructions: string | null;
     pdfSummary: string | null;
   };
@@ -242,6 +412,14 @@ export interface StudentAssignmentPayload {
     attemptsUsed: number;
     attemptsRemaining: number;
     canSubmit: boolean;
+    attempts?: Array<{
+      attemptNumber: number;
+      pointsEarned: number | null;
+      percentage: number | null;
+      letterGrade: string | null;
+      submissionDate: string | null;
+      isKept: boolean;
+    }>;
   };
   grade: {
     pointsEarned: number | null;

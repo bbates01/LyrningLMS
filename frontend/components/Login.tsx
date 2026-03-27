@@ -88,6 +88,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !loading) {
+                  // Form submit also handles Enter; keep explicit fallback for consistency.
+                  (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
+                }
+              }}
               disabled={loading}
               className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 px-6 focus:outline-none focus:ring-2 focus:ring-[#ba3638]/30 transition-all text-gray-900 disabled:opacity-50"
               placeholder="••••••••"

@@ -39,12 +39,22 @@ export async function chatWithTutor(
   history: { role: string; content: string }[],
   instructions: string,
   studentId?: number,
-  assignmentContext?: string
+  assignmentContext?: string,
+  assignmentId?: number,
+  attemptNumber?: number
 ): Promise<string> {
   const res = await fetch(`${API_BASE}/api/ai/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, instructions, studentId, assignmentContext }),
+    body: JSON.stringify({
+      message,
+      history,
+      instructions,
+      studentId,
+      assignmentContext,
+      assignmentId,
+      attemptNumber,
+    }),
   });
   const data = await res.json();
   if (!res.ok) {

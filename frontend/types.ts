@@ -12,7 +12,8 @@ export type ViewState =
   | 'ASSIGNMENT_VIEW'
   | 'VIEW_AS_STUDENT'
   | 'ASSIGNMENT_CREATE_SUCCESS'
-  | 'GRADES';
+  | 'GRADES'
+  | 'METRICS';
 
 /** Class/course from API (teacher's taught classes) */
 export interface ClassSummary {
@@ -54,9 +55,15 @@ export interface Assignment {
   description?: string;
   type: 'Homework' | 'Quiz' | 'Exam' | 'Project' | 'Lab' | string;
   dueDate: string;
+  dueDateRaw?: string | null;
   score?: string;
   content?: string;
   aiInstructions?: string;
+  maxPoints?: number;
+  allowedSubmissions?: number;
+  attemptScoringPolicy?: 'latest' | 'highest' | 'average';
+  allowPartialShortAnswer?: boolean;
+  allowPartialSelectAllThatApply?: boolean;
   materials?: string[];
   assignmentLink?: string;
 }

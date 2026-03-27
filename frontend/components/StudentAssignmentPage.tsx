@@ -36,6 +36,8 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'tutor'; content: string }>>([]);
+  const chatScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const chatBottomRef = React.useRef<HTMLDivElement | null>(null);
 
   const session = useMemo(() => {
     try {
@@ -68,6 +70,11 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
   useEffect(() => {
     loadAssignment();
   }, [loadAssignment]);
+
+  useEffect(() => {
+    if (!chatBottomRef.current) return;
+    chatBottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [chatMessages, chatLoading]);
 
   const assignmentContext = useMemo(() => {
     if (!payload) return '';
@@ -178,6 +185,8 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
     const msg = chatInput.trim();
     if (!msg || chatLoading) return;
 
+    const startMs = Date.now();
+    const MIN_TYPING_MS = 2000;
     const nextMessages = [...chatMessages, { role: 'user' as const, content: msg }];
     setChatMessages(nextMessages);
     setChatInput('');
@@ -185,12 +194,24 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
     try {
       const reply = await chatWithTutor(
         msg,
-        chatMessages.map((m) => ({ role: m.role === 'tutor' ? 'assistant' : 'user', content: m.content })),
+        nextMessages.map((m) => ({ role: m.role === 'tutor' ? 'assistant' : 'user', content: m.content })),
         assignment.aiInstructions || '',
         session?.userId,
-        assignmentContext
+        assignmentContext,
+        assignmentId,
+        (payload.submission.attemptsUsed ?? 0) + 1
       );
+      const elapsed = Date.now() - startMs;
+      if (elapsed < MIN_TYPING_MS) {
+        await new Promise((resolve) => setTimeout(resolve, MIN_TYPING_MS - elapsed));
+      }
       setChatMessages((prev) => [...prev, { role: 'tutor', content: reply }]);
+    } catch {
+      const elapsed = Date.now() - startMs;
+      if (elapsed < MIN_TYPING_MS) {
+        await new Promise((resolve) => setTimeout(resolve, MIN_TYPING_MS - elapsed));
+      }
+      setChatMessages((prev) => [...prev, { role: 'tutor', content: "I'm having trouble responding right now. Please try again." }]);
     } finally {
       setChatLoading(false);
     }
@@ -198,6 +219,11 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8">
+      <div className="sticky top-0 z-40 bg-gray-50 py-2 mb-4">
+        <div className="max-w-6xl mx-auto bg-white border border-gray-200 rounded-2xl px-4 sm:px-6 lg:px-8 py-2">
+          <img src="/img/long-logo.png" alt="Lyrning" className="h-12 sm:h-16 md:h-20 w-auto object-contain object-left" />
+        </div>
+      </div>
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
         <div className="space-y-6">
         <div className="bg-white border border-gray-200 rounded-2xl p-6">
@@ -205,7 +231,10 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
           {assignment.description && <p className="text-gray-700 mt-2">{assignment.description}</p>}
           <div className="mt-4 text-sm text-gray-600 space-y-1">
             <p>Max points: {assignment.maxPoints}</p>
-            <p>Allowed submissions: {assignment.allowedSubmissions}</p>
+            <p>
+              Allowed submissions: {assignment.allowedSubmissions}
+              {assignment.attemptScoringPolicyLabel ? ` -- ${assignment.attemptScoringPolicyLabel}` : ''}
+            </p>
             <p>Attempts used: {payload.submission.attemptsUsed}</p>
             <p>Attempts remaining: {payload.submission.attemptsRemaining}</p>
           </div>
@@ -324,6 +353,32 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
               )}
             </div>
           )}
+
+          {payload.submission.attempts && payload.submission.attempts.length > 0 && (
+            <div className="mt-6 p-4 bg-white border border-gray-200 rounded-xl">
+              <h3 className="font-bold text-gray-900 mb-2">Attempt Scores</h3>
+              <div className="space-y-2">
+                {payload.submission.attempts.map((attempt) => (
+                  <div
+                    key={attempt.attemptNumber}
+                    className="rounded-lg border px-3 py-2 text-sm bg-gray-50 border-gray-200 text-gray-700"
+                  >
+                    <span className="font-medium">Attempt {attempt.attemptNumber}:</span>{' '}
+                    {attempt.pointsEarned != null ? (
+                      `${attempt.pointsEarned}/${payload.assignment.maxPoints} (${attempt.percentage ?? '--'}%, ${attempt.letterGrade ?? '--'})`
+                    ) : (
+                      'No score'
+                    )}
+                  </div>
+                ))}
+                {assignment.attemptScoringPolicy === 'average' && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Average mode: the kept score is the average across all attempts.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         </div>
 
@@ -333,9 +388,9 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
             The tutor follows your teacher's assignment guidelines.
           </p>
 
-          <div className="mt-4 h-80 overflow-y-auto border border-gray-100 rounded-xl p-3 bg-gray-50 space-y-3">
+          <div ref={chatScrollRef} className="mt-4 h-96 overflow-y-auto border border-gray-100 rounded-xl p-3 bg-gray-50 space-y-3">
             {chatMessages.length === 0 && (
-              <p className="text-sm text-gray-500">Ask for hints, steps, or concept help while you work.</p>
+              <p className="text-sm text-gray-500">Need help?</p>
             )}
             {chatMessages.map((m, idx) => (
               <div
@@ -345,7 +400,17 @@ const StudentAssignmentPage: React.FC<StudentAssignmentPageProps> = ({ classId, 
                 {m.content}
               </div>
             ))}
-            {chatLoading && <p className="text-xs text-gray-500">Tutor is thinking...</p>}
+            {chatLoading && (
+              <div className="text-xs text-gray-500 flex items-center gap-1">
+                <span>Tutor is thinking</span>
+                <span className="inline-flex gap-0.5">
+                  <span className="animate-bounce [animation-delay:0ms]">.</span>
+                  <span className="animate-bounce [animation-delay:120ms]">.</span>
+                  <span className="animate-bounce [animation-delay:240ms]">.</span>
+                </span>
+              </div>
+            )}
+            <div ref={chatBottomRef} />
           </div>
 
           <div className="mt-3 flex gap-2">

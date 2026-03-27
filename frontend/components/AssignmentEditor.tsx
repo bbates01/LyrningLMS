@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Pencil, Upload, CheckCircle2 } from './Icons';
 import { generateAssignmentQuestions, batchUpdateQuestions, extractPdfText, type GenerateQuestionsResponse } from '../services/aiService';
 import { uploadAssignmentPdf, createAssignment, saveAssignmentQuestions } from '../services/api';
@@ -119,11 +119,18 @@ interface Props {
 
 const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCreated, assignmentType = 'homework' }) => {
   const [title, setTitle] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [noDueDate, setNoDueDate] = useState(false);
   const [aiParams, setAiParams] = useState('');
   const [questionTypes, setQuestionTypes] = useState<string[]>(['multiple_choice']);
   const [generationCommands, setGenerationCommands] = useState('');
-  const [questionCount, setQuestionCount] = useState(7);
-  const [allowedSubmissions, setAllowedSubmissions] = useState(1);
+  const [questionCountInput, setQuestionCountInput] = useState('7');
+  const [assignmentMaxPointsInput, setAssignmentMaxPointsInput] = useState('100');
+  const [allowedSubmissionsInput, setAllowedSubmissionsInput] = useState('1');
+  const [attemptScoringPolicy, setAttemptScoringPolicy] = useState<'latest' | 'highest' | 'average'>('latest');
+  const [allowPartialShortAnswer, setAllowPartialShortAnswer] = useState(false);
+  const [allowPartialSelectAllThatApply, setAllowPartialSelectAllThatApply] = useState(false);
+  const [questionPointValues, setQuestionPointValues] = useState<string[]>([]);
   const [result, setResult] = useState('');
   const [questionsData, setQuestionsData] = useState<GenerateQuestionsResponse | null>(null);
   const [showReview, setShowReview] = useState(false);
@@ -149,13 +156,153 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
     );
   };
 
+  const parseIntInRange = (raw: string, min: number, max: number): number | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const n = Number(trimmed);
+    if (!Number.isInteger(n)) return null;
+    if (n < min || n > max) return null;
+    return n;
+  };
+
+  const parsePositiveNumber = (raw: string): number | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Number(n);
+  };
+
+  const normalizeNumberInput = (raw: string): string => {
+    if (raw === '') return '';
+    return raw.replace(/^0+(?=\d)/, '');
+  };
+
+  const distributeEvenly = (totalPoints: number, questionCount: number): number[] => {
+    const count = Math.max(1, questionCount);
+    const base = Number((totalPoints / count).toFixed(2));
+    const points = new Array(count).fill(base);
+    const sum = Number(points.reduce((s, n) => s + n, 0).toFixed(2));
+    points[count - 1] = Number((points[count - 1] + (totalPoints - sum)).toFixed(2));
+    return points;
+  };
+
+  const toPointInputStrings = (values: number[]) =>
+    values.map((n) => Number(n.toFixed(2)).toString());
+
+  const toPointNumbers = (values: string[], questionCount: number): number[] => {
+    const out: number[] = [];
+    for (let i = 0; i < questionCount; i++) {
+      const raw = (values[i] ?? '').trim();
+      if (!raw) {
+        out.push(0);
+        continue;
+      }
+      const n = Number(raw);
+      out.push(Number.isFinite(n) ? n : 0);
+    }
+    return out;
+  };
+
+  const distributeByWeights = (totalPoints: number, weights: number[]): number[] => {
+    const safeWeights = weights.map((w) => (Number.isFinite(w) && w > 0 ? w : 0));
+    const weightSum = safeWeights.reduce((s, w) => s + w, 0);
+    if (weightSum <= 0) return distributeEvenly(totalPoints, Math.max(1, weights.length));
+    const raw = safeWeights.map((w) => (totalPoints * w) / weightSum);
+    const rounded = raw.map((v) => Number(v.toFixed(2)));
+    const roundedSum = Number(rounded.reduce((s, n) => s + n, 0).toFixed(2));
+    rounded[rounded.length - 1] = Number((rounded[rounded.length - 1] + (totalPoints - roundedSum)).toFixed(2));
+    return rounded;
+  };
+
+  const pointsFromBatchCommand = (
+    command: string,
+    questions: GenerateQuestionsResponse['questions'],
+    totalPoints: number,
+  ): number[] => {
+    const lower = command.toLowerCase();
+    const typeKeywords: Array<{ key: string; patterns: string[] }> = [
+      { key: 'short_answer', patterns: ['short answer', 'short answers'] },
+      { key: 'select_all_that_apply', patterns: ['select all', 'all that apply'] },
+      { key: 'multiple_choice', patterns: ['multiple choice', 'mcq'] },
+      { key: 'true_false', patterns: ['true/false', 'true false'] },
+    ];
+    const weightsByType: Record<string, number> = {
+      short_answer: 1,
+      select_all_that_apply: 1,
+      multiple_choice: 1,
+      true_false: 1,
+    };
+
+    const explicitPointsByType: Partial<Record<string, number>> = {};
+    const setExplicitPoints = (typeKey: string, patterns: string[]) => {
+      for (const p of patterns) {
+        const re = new RegExp(`${p}[^\\n\\r]*?worth[^\\n\\r]*?(\\d+(?:\\.\\d+)?)\\s*point`, 'i');
+        const m = command.match(re);
+        if (m) {
+          const n = Number(m[1]);
+          if (Number.isFinite(n) && n > 0) explicitPointsByType[typeKey] = n;
+        }
+      }
+    };
+    setExplicitPoints('short_answer', ['short\\s*answer', 'short\\s*answers']);
+    setExplicitPoints('select_all_that_apply', ['select\\s*all', 'all\\s*that\\s*apply']);
+    setExplicitPoints('multiple_choice', ['multiple\\s*choice', 'mcq']);
+    setExplicitPoints('true_false', ['true\\s*\\/\\s*false', 'true\\s*false']);
+
+    for (const t of typeKeywords) {
+      const mentioned = t.patterns.some((p) => lower.includes(p));
+      if (!mentioned) continue;
+      if (/more|higher|heavier|worth more/.test(lower)) weightsByType[t.key] = 2;
+      if (/less|lower|lighter|worth less/.test(lower)) weightsByType[t.key] = 0.5;
+    }
+
+    const hasExplicitPoints = Object.keys(explicitPointsByType).length > 0;
+    if (hasExplicitPoints) {
+      const points = questions.map((q) => {
+        const t = q.questionType || 'multiple_choice';
+        const n = explicitPointsByType[t];
+        return Number.isFinite(Number(n)) && Number(n) > 0 ? Number(n) : 0;
+      });
+      const pointsSum = points.reduce((s, n) => s + n, 0);
+      if (pointsSum > 0) {
+        const scaled = points.map((n) => (n <= 0 ? 0 : Number(((n / pointsSum) * totalPoints).toFixed(2))));
+        const scaledSum = Number(scaled.reduce((s, n) => s + n, 0).toFixed(2));
+        const lastPositiveIdx = [...scaled].map((n, i) => ({ n, i })).reverse().find((x) => x.n > 0)?.i ?? (scaled.length - 1);
+        scaled[lastPositiveIdx] = Number((scaled[lastPositiveIdx] + (totalPoints - scaledSum)).toFixed(2));
+        return scaled;
+      }
+    }
+
+    const questionWeights = questions.map((q) => weightsByType[q.questionType || 'multiple_choice'] ?? 1);
+    return distributeByWeights(totalPoints, questionWeights);
+  };
+
+  useEffect(() => {
+    if (!questionTypes.includes('short_answer') && allowPartialShortAnswer) {
+      setAllowPartialShortAnswer(false);
+    }
+    if (!questionTypes.includes('select_all_that_apply') && allowPartialSelectAllThatApply) {
+      setAllowPartialSelectAllThatApply(false);
+    }
+  }, [questionTypes, allowPartialShortAnswer, allowPartialSelectAllThatApply]);
+
   const handleGenerate = async () => {
     if (!title.trim()) {
       setUploadError('Please enter an assignment title before generating questions.');
       return;
     }
+    if (!noDueDate && !dueDate.trim()) {
+      setUploadError('Please enter a due date before generating questions.');
+      return;
+    }
     if (questionTypes.length === 0) {
       setUploadError('Select at least one question type.');
+      return;
+    }
+    const parsedQuestionCount = parseIntInRange(questionCountInput, 1, 70);
+    if (parsedQuestionCount == null) {
+      setUploadError('Number of questions is required and must be between 1 and 70.');
       return;
     }
     try {
@@ -169,12 +316,18 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
         title || 'Assignment',
         materials,
         '', // teacherInstructions for generation; we use generationCommands below
-        questionCount,
+        parsedQuestionCount,
         questionTypes,
         generationCommands
       );
       setPdfSummary(data.pdfSummary ?? null);
       setQuestionsData(data);
+      const totalPoints = parsePositiveNumber(assignmentMaxPointsInput) ?? 100;
+      const shouldAdjustPoints = /(point|worth|higher|lower|more|less)/i.test(generationCommands);
+      const nextPoints = shouldAdjustPoints
+        ? pointsFromBatchCommand(generationCommands, data.questions, totalPoints)
+        : distributeEvenly(totalPoints, data.questions.length);
+      setQuestionPointValues(toPointInputStrings(nextPoints));
       setResult(formatQuestionsForDisplay(data));
       setShowReview(true);
       setBatchMessage('');
@@ -198,6 +351,12 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
     try {
       const { data, message } = await batchUpdateQuestions(parsed, batchCommand.trim());
       setQuestionsData(data);
+      const totalPoints = parsePositiveNumber(assignmentMaxPointsInput) ?? 100;
+      const shouldAdjustPoints = /(point|worth|higher|lower|more|less)/i.test(batchCommand);
+      const nextPoints = shouldAdjustPoints
+        ? pointsFromBatchCommand(batchCommand, data.questions, totalPoints)
+        : distributeEvenly(totalPoints, data.questions.length);
+      setQuestionPointValues(toPointInputStrings(nextPoints));
       setResult(formatQuestionsForDisplay(data));
       setBatchMessage(message);
       setBatchCommand('');
@@ -216,6 +375,8 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
       return;
     }
     setQuestionsData(parsed);
+    const totalPoints = parsePositiveNumber(assignmentMaxPointsInput) ?? 100;
+    setQuestionPointValues(toPointInputStrings(distributeEvenly(totalPoints, parsed.questions.length)));
     setResult(formatQuestionsForDisplay(parsed));
     setUploadError('');
     setSaveFeedback(true);
@@ -232,14 +393,38 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
     setConfirmError('');
     setIsSaving(true);
     try {
+      const parsedMaxPoints = parsePositiveNumber(assignmentMaxPointsInput);
+      if (parsedMaxPoints == null) {
+        setConfirmError('Total assignment points is required and must be greater than 0.');
+        return;
+      }
+      const parsedAllowedSubmissions = parseIntInRange(allowedSubmissionsInput, 1, 10);
+      if (parsedAllowedSubmissions == null) {
+        setConfirmError('Allowed submissions is required and must be between 1 and 10.');
+        return;
+      }
+      const workingQuestionPoints =
+        questionPointValues.length === questionsData.questions.length
+          ? toPointNumbers(questionPointValues, questionsData.questions.length)
+          : distributeEvenly(parsedMaxPoints, questionsData.questions.length);
+      const pointsTotal = Number(workingQuestionPoints.reduce((s, n) => s + Number(n || 0), 0).toFixed(2));
+      if (Math.abs(pointsTotal - parsedMaxPoints) > 0.01) {
+        setConfirmError(`Question point total (${pointsTotal}) must equal assignment total (${parsedMaxPoints}).`);
+        return;
+      }
       const createRes = await createAssignment(
         classId,
         teacherId,
         title.trim(),
+        noDueDate ? '' : dueDate,
         questionsData.directions,
         aiParams.trim() || undefined,
         questionTypes.length ? questionTypes : undefined,
-        allowedSubmissions,
+        parsedMaxPoints,
+        parsedAllowedSubmissions,
+        parsedAllowedSubmissions > 1 ? attemptScoringPolicy : 'latest',
+        allowPartialShortAnswer,
+        allowPartialSelectAllThatApply,
         assignmentType,
         pdfSummary
       );
@@ -256,11 +441,13 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
         }
       }
       const payload = questionsData.questions.map((q) => {
+        const idx = Math.max(0, Number(q.questionNumber || 1) - 1);
+        const qPoints = Number(workingQuestionPoints[idx] ?? 1);
         const type = q.questionType || 'multiple_choice';
         if (type === 'select_all_that_apply' && q.correctAnswers && q.correctAnswers.length > 0) {
-          return { questionText: q.question, questionType: 'select_all_that_apply' as const, correctAnswers: q.correctAnswers, falseAnswers: q.falseAnswers || [] };
+          return { questionText: q.question, questionType: 'select_all_that_apply' as const, maxPoints: qPoints, correctAnswers: q.correctAnswers, falseAnswers: q.falseAnswers || [] };
         }
-        return { questionText: q.question, questionType: type, correctAnswer: q.correctAnswer ?? '', falseAnswers: q.falseAnswers || [] };
+        return { questionText: q.question, questionType: type, maxPoints: qPoints, correctAnswer: q.correctAnswer ?? '', falseAnswers: q.falseAnswers || [] };
       });
       const saveRes = await saveAssignmentQuestions(classId, newAssignmentId, payload);
       if (!saveRes.success) {
@@ -277,7 +464,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
       confirmInProgressRef.current = false;
       setIsSaving(false);
     }
-  }, [classId, teacherId, title, questionsData, aiParams, questionTypes, pendingFiles, onAssignmentCreated, pdfSummary, allowedSubmissions, assignmentType]);
+  }, [classId, teacherId, title, dueDate, noDueDate, questionsData, aiParams, questionTypes, pendingFiles, onAssignmentCreated, pdfSummary, allowedSubmissionsInput, attemptScoringPolicy, allowPartialShortAnswer, allowPartialSelectAllThatApply, assignmentType, assignmentMaxPointsInput, questionPointValues]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -293,15 +480,38 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
 
   return (
     <div className="space-y-8 pb-6">
-      <div className="flex items-center gap-2 border-b-2 border-gray-900 pb-2 max-w-md">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="ADD ASSIGNMENT TITLE"
-          className="text-2xl font-bold bg-transparent focus:outline-none flex-1 placeholder:text-gray-300 min-w-0"
-        />
-        <Pencil className="w-6 h-6 text-gray-500 shrink-0" />
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b-2 border-gray-900 pb-2">
+        <div className="flex items-center gap-2 min-w-[280px] flex-1">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="ADD ASSIGNMENT TITLE"
+            className="text-2xl font-bold bg-transparent focus:outline-none flex-1 placeholder:text-gray-300 min-w-0"
+          />
+          <Pencil className="w-6 h-6 text-gray-500 shrink-0" />
+        </div>
+        {!showReview && (
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Due date</label>
+          <input
+            type="datetime-local"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:bg-gray-100 disabled:text-gray-500"
+            disabled={noDueDate}
+          />
+          <label className="inline-flex items-center gap-2 text-xs text-gray-600 ml-1">
+            <input
+              type="checkbox"
+              checked={noDueDate}
+              onChange={(e) => setNoDueDate(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            No due date (optional)
+          </label>
+        </div>
+        )}
       </div>
 
       {!showReview ? (
@@ -346,18 +556,27 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Total assignment points</h2>
+            <input
+              type="number"
+              min={1}
+              value={assignmentMaxPointsInput}
+              onChange={(e) => setAssignmentMaxPointsInput(normalizeNumberInput(e.target.value))}
+              className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-gray-400"
+            />
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Number of questions</h2>
             <input
               type="number"
               min={1}
-              max={30}
-              value={questionCount}
-              onChange={(e) => {
-                const n = parseInt(e.target.value || '1', 10);
-                setQuestionCount(Number.isNaN(n) ? 1 : Math.max(1, Math.min(n, 30)));
-              }}
+              max={70}
+              value={questionCountInput}
+              onChange={(e) => setQuestionCountInput(normalizeNumberInput(e.target.value))}
               className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
+            <p className="text-xs text-gray-500">Max: 70</p>
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">
@@ -366,19 +585,32 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
               type="number"
               min={1}
               max={10}
-              value={allowedSubmissions}
-              onChange={(e) => {
-                const n = parseInt(e.target.value || '1', 10);
-                setAllowedSubmissions(Number.isNaN(n) ? 1 : Math.max(1, Math.min(n, 10)));
-              }}
+              value={allowedSubmissionsInput}
+              onChange={(e) => setAllowedSubmissionsInput(normalizeNumberInput(e.target.value))}
               className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
-            <p className="text-xs text-gray-500">Default is 1. Students cannot submit more than this limit.</p>
+            <p className="text-xs text-gray-500">Max: 10</p>
+            {Number(allowedSubmissionsInput) > 1 && (
+              <div className="pt-1">
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                  Score to save across attempts
+                </label>
+                <select
+                  value={attemptScoringPolicy}
+                  onChange={(e) => setAttemptScoringPolicy(e.target.value as 'latest' | 'highest' | 'average')}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value="latest">Most Recent</option>
+                  <option value="highest">Highest</option>
+                  <option value="average">Average</option>
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">AI interaction instructions</h2>
-            <p className="text-xs text-gray-500">How the AI should interact with students (e.g. &quot;Emphasize conceptual understanding&quot;). Stored with the assignment.</p>
+            <p className="text-xs text-gray-500">How the AI should interact with students (e.g. &quot;Emphasize conceptual understanding&quot;).</p>
             <textarea
               value={aiParams}
               onChange={(e) => setAiParams(e.target.value)}
@@ -403,11 +635,37 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
                 </label>
               ))}
             </div>
+            {(questionTypes.includes('short_answer') || questionTypes.includes('select_all_that_apply')) && (
+              <div className="pt-2 space-y-2">
+                {questionTypes.includes('short_answer') && (
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={allowPartialShortAnswer}
+                      onChange={(e) => setAllowPartialShortAnswer(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    Allow partial credit for short answer
+                  </label>
+                )}
+                {questionTypes.includes('select_all_that_apply') && (
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={allowPartialSelectAllThatApply}
+                      onChange={(e) => setAllowPartialSelectAllThatApply(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    Allow partial credit for select all that apply
+                  </label>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Question generation commands</h2>
-            <p className="text-xs text-gray-500">Used only when generating (e.g. &quot;Make answer choices one sentence each&quot;). Not stored.</p>
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">AI question instructions</h2>
+            <p className="text-xs text-gray-500">Used when generating with AI (e.g. &quot;Make answer choices one sentence each&quot;).</p>
             <textarea
               value={generationCommands}
               onChange={(e) => setGenerationCommands(e.target.value)}
@@ -474,6 +732,70 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
             onChange={(e) => setResult(e.target.value)}
             className="w-full min-h-[320px] rounded-2xl border border-gray-200 p-4 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
+          {questionsData && questionsData.questions.length > 0 && (
+            <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-gray-800">Question points</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600">Total points</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={assignmentMaxPointsInput}
+                    onChange={(e) => {
+                      const normalized = normalizeNumberInput(e.target.value);
+                      setAssignmentMaxPointsInput(normalized);
+                      const parsedTotal = parsePositiveNumber(normalized);
+                      if (parsedTotal != null) {
+                        setQuestionPointValues(toPointInputStrings(distributeEvenly(parsedTotal, questionsData.questions.length)));
+                      }
+                    }}
+                    className="w-24 px-2 py-1 border border-gray-300 rounded-lg text-sm text-right"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const totalPoints = parsePositiveNumber(assignmentMaxPointsInput) ?? 100;
+                      setQuestionPointValues(toPointInputStrings(distributeEvenly(totalPoints, questionsData.questions.length)));
+                    }}
+                    className="px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-600 hover:bg-gray-100"
+                  >
+                    Auto distribute points
+                  </button>
+                </div>
+              </div>
+              {questionsData.questions.map((q, idx) => (
+                <div key={`${q.questionNumber}-${idx}`} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-700 truncate">Q{q.questionNumber}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={questionPointValues[idx] ?? ''}
+                    onChange={(e) => {
+                      const next = [...questionPointValues];
+                      const normalized = normalizeNumberInput(e.target.value);
+                      next[idx] = normalized;
+                      setQuestionPointValues(next);
+                    }}
+                    className="w-24 px-2 py-1 border border-gray-300 rounded-lg text-sm text-right"
+                  />
+                </div>
+              ))}
+              <p
+                className={`text-xs ${
+                  Math.abs(
+                    Number(toPointNumbers(questionPointValues, questionsData.questions.length).reduce((s, n) => s + Number(n || 0), 0).toFixed(2)) -
+                    (parsePositiveNumber(assignmentMaxPointsInput) ?? 100)
+                  ) > 0.01
+                    ? 'text-red-600 font-medium'
+                    : 'text-gray-600'
+                }`}
+              >
+                Total: {Number(toPointNumbers(questionPointValues, questionsData.questions.length).reduce((s, n) => s + Number(n || 0), 0).toFixed(2))} / {parsePositiveNumber(assignmentMaxPointsInput) ?? 100}
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <button

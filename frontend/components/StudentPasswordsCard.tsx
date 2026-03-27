@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import AddStudentToClassCard from './AddStudentToClassCard';
 
 type ExistingStudent = {
   student_id: number;
@@ -11,6 +12,7 @@ type ExistingStudent = {
 interface StudentPasswordsCardProps {
   teacherUsername?: string;
   classId: number;
+  refreshKey?: number;
 }
 
 const PASSWORDS_STORAGE_KEY = 'lyrning_student_passwords_by_id';
@@ -47,8 +49,10 @@ function findStudentByLookupToken(students: ExistingStudent[], lookupToken: stri
   return students.find((s) => s.username.toLowerCase() === lowerToken) ?? null;
 }
 
-const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUsername, classId }) => {
+const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUsername, classId, refreshKey = 0 }) => {
   const [studentLookup, setStudentLookup] = useState('');
+  const [localRefreshKey, setLocalRefreshKey] = useState(0);
+  const effectiveRefreshKey = refreshKey + localRefreshKey;
   const [error, setError] = useState<string>('');
   const [existingStudents, setExistingStudents] = useState<ExistingStudent[]>([]);
   const [loadingExisting, setLoadingExisting] = useState(false);
@@ -68,17 +72,15 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [removeConfirmStudent, setRemoveConfirmStudent] = useState<ExistingStudent | null>(null);
+  const [removingStudent, setRemovingStudent] = useState(false);
   const didHydrateFromBackendRef = useRef(false);
+  const backdropMouseDownRef = useRef(false);
 
   const selectedStudentName = useMemo(() => {
     if (!selectedStudent) return '';
     return `${selectedStudent.first_name} ${selectedStudent.last_name}`.trim();
   }, [selectedStudent]);
-
-  const selectedStudentKnownPassword = useMemo(() => {
-    if (!selectedStudent) return '';
-    return passwordsByStudentId[selectedStudent.student_id] ?? '';
-  }, [selectedStudent, passwordsByStudentId]);
 
   const resolvedLookupStudent = useMemo(
     () => findStudentByLookupToken(existingStudents, studentLookup),
@@ -149,7 +151,7 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
       .finally(() => {
         setLoadingExisting(false);
       });
-  }, [classId]);
+  }, [classId, effectiveRefreshKey]);
 
   // Populate the teacher-visible plaintext password view from the backend.
   // This makes passwords persist across logouts/browsers (backend stores plaintext defaults separately).
@@ -263,7 +265,7 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
 
       const knownPassword = passwordsByStudentId[selectedStudent.student_id] ?? '';
       setCurrentPassword(knownPassword);
-      setEditedPassword(knownPassword);
+      setEditedPassword('');
       setAuthConfirmed(true);
       setSaveMessage('');
     } catch {
@@ -307,12 +309,40 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
         [selectedStudent.student_id]: trimmed,
       }));
       setCurrentPassword(trimmed);
-      setEditedPassword(trimmed);
+      setEditedPassword('');
       setSaveMessage('Password updated successfully.');
     } catch {
       setSaveMessage('Connection error. Make sure the backend server is running.');
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  const handleRemoveStudent = async (student: ExistingStudent) => {
+    setRemoveConfirmStudent(student);
+  };
+
+  const handleConfirmRemoveStudent = async () => {
+    if (!removeConfirmStudent) return;
+    setError('');
+    setRemovingStudent(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/classes/${classId}/students/${removeConfirmStudent.student_id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setError(data?.error || 'Failed to remove student from class.');
+        return;
+      }
+      setExistingStudents((prev) => prev.filter((s) => s.student_id !== removeConfirmStudent.student_id));
+      setSaveMessage(`Removed @${removeConfirmStudent.username} from this class.`);
+      setLocalRefreshKey((v) => v + 1);
+      setRemoveConfirmStudent(null);
+    } catch {
+      setError('Connection error. Make sure the backend server is running.');
+    } finally {
+      setRemovingStudent(false);
     }
   };
 
@@ -354,12 +384,13 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
             </p>
           )}
 
-          <div className="border border-gray-100 rounded-2xl bg-gray-50 max-h-64 overflow-auto">
-            <div className="grid grid-cols-6 px-4 py-2 text-[11px] font-semibold text-gray-600 bg-gray-100 border-b border-gray-200">
+          <div className="border border-gray-100 rounded-2xl bg-gray-50 max-h-64 overflow-auto w-full">
+            <div className="sticky top-0 z-10 grid grid-cols-9 px-4 py-2 text-[11px] font-semibold text-gray-600 bg-gray-100 border-b border-gray-200 gap-2">
               <div className="col-span-2">Name</div>
               <div>Username</div>
-              <div className="col-span-2">Email</div>
-              <div className="text-right">Action</div>
+              <div className="col-span-3">Email</div>
+              <div className="col-span-2 text-center"></div>
+              <div className="text-center"></div>
             </div>
             {loadingExisting ? (
               <div className="px-4 py-3 text-xs text-gray-500">Loading students...</div>
@@ -368,20 +399,29 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
             ) : (
               <div className="divide-y divide-gray-100 text-xs">
                 {existingStudents.map((s) => (
-                  <div key={s.student_id} className="grid grid-cols-6 px-4 py-2 items-center gap-2">
+                  <div key={s.student_id} className="grid grid-cols-9 px-4 py-2 items-center gap-2">
                     <div className="col-span-2 text-gray-900">
                       {s.first_name} {s.last_name}
                     </div>
                     <div className="text-gray-700">{s.username}</div>
-                    <div className="col-span-2 text-gray-600 truncate">{s.email}</div>
-                    <div className="text-right">
+                    <div className="col-span-3 text-gray-600 truncate">{s.email}</div>
+                    <div className="col-span-2 flex justify-center">
                       <button
                         type="button"
                         onClick={() => openModalForStudent(s)}
                         disabled={!teacherUsername}
-                        className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-800 hover:bg-gray-100 disabled:opacity-50"
+                        className="px-2.5 py-1 rounded-lg border border-gray-200 text-gray-800 hover:bg-gray-100 disabled:opacity-50 whitespace-nowrap"
                       >
                         View credentials
+                      </button>
+                    </div>
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStudent(s)}
+                        className="px-2.5 py-1 rounded-lg border border-red-200 text-red-700 hover:bg-red-50"
+                      >
+                        Remove
                       </button>
                     </div>
                   </div>
@@ -394,6 +434,9 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
               </div>
             )}
           </div>
+
+          {/* Add student UI placed directly under the current students list */}
+          <AddStudentToClassCard classId={classId} onStudentAdded={() => setLocalRefreshKey((v) => v + 1)} />
         </div>
 
         {error && (
@@ -402,15 +445,21 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
           </div>
         )}
 
-        <p className="text-xs text-gray-500">
-          Note: passwords are stored as <span className="font-medium">bcrypt hashes</span>, and the backend also stores teacher-visible plaintext defaults for this admin UI so passwords remain available after logout.
-        </p>
       </div>
 
       {modalOpen && selectedStudent && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={closeModal}
+          onMouseDown={(e) => {
+            backdropMouseDownRef.current = e.target === e.currentTarget;
+          }}
+          onClick={(e) => {
+            const clickedBackdrop = e.target === e.currentTarget;
+            if (backdropMouseDownRef.current && clickedBackdrop) {
+              closeModal();
+            }
+            backdropMouseDownRef.current = false;
+          }}
         >
           <div
             className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4"
@@ -495,7 +544,7 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
                     type="text"
                     value={editedPassword}
                     onChange={(e) => setEditedPassword(e.target.value)}
-                    placeholder={selectedStudentKnownPassword ? '' : 'Enter a new password'}
+                    placeholder="Enter a new password"
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ba3638]/30 focus:border-[#ba3638]"
                     disabled={savingPassword}
                   />
@@ -523,6 +572,37 @@ const StudentPasswordsCard: React.FC<StudentPasswordsCardProps> = ({ teacherUser
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {removeConfirmStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !removingStudent && setRemoveConfirmStudent(null)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h4 className="text-lg font-bold text-black">Remove Student?</h4>
+            <p className="text-sm text-gray-600">
+              Remove <span className="font-semibold text-gray-900">{removeConfirmStudent.first_name} {removeConfirmStudent.last_name}</span> (@{removeConfirmStudent.username}) from this class?
+            </p>
+            <p className="text-xs text-gray-500">You can add them back later.</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setRemoveConfirmStudent(null)}
+                disabled={removingStudent}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveStudent}
+                disabled={removingStudent}
+                className="px-4 py-2 rounded-lg text-white text-sm disabled:opacity-50"
+                style={{ backgroundColor: '#ba3638' }}
+              >
+                {removingStudent ? 'Removing...' : 'Confirm'}
+              </button>
+            </div>
           </div>
         </div>
       )}
