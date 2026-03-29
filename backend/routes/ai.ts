@@ -16,6 +16,53 @@ const groq = process.env.GROQ_API_KEY
 
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-70b-versatile';
 
+const ASSIGNMENT_QUESTION_REFUSAL =
+  "That looks like a question directly from this assignment, so I can't answer it for you. I can help you think through the ideas behind it, review related concepts, or work through a similar example — what would you like to focus on?";
+
+function normalizeTextForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Sørensen–Dice coefficient on word sets (0–1). */
+function wordDiceSimilarity(a: string, b: string): number {
+  const words = (t: string) =>
+    new Set(
+      normalizeTextForMatch(t)
+        .split(' ')
+        .filter((w) => w.length > 1)
+    );
+  const wa = words(a);
+  const wb = words(b);
+  if (wa.size === 0 || wb.size === 0) return 0;
+  let inter = 0;
+  for (const w of wa) {
+    if (wb.has(w)) inter += 1;
+  }
+  return (2 * inter) / (wa.size + wb.size);
+}
+
+function messageMatchesAssignmentQuestion(message: string, questionTexts: string[]): boolean {
+  const nm = normalizeTextForMatch(message);
+  if (nm.length < 12) return false;
+  for (const qt of questionTexts) {
+    const raw = typeof qt === 'string' ? qt.trim() : '';
+    if (raw.length < 12) continue;
+    const nq = normalizeTextForMatch(raw);
+    if (nq.length < 12) continue;
+    if (nm === nq) return true;
+    if (wordDiceSimilarity(message, raw) >= 0.72) return true;
+    const shortLen = Math.min(nm.length, nq.length);
+    const longStr = nm.length >= nq.length ? nm : nq;
+    const shortStr = nm.length >= nq.length ? nq : nm;
+    if (shortLen >= 20 && longStr.includes(shortStr)) return true;
+  }
+  return false;
+}
+
 /** POST /api/ai/chat — tutor chat (student message + history + teacher instructions) */
 router.post('/chat', async (req: express.Request, res: express.Response) => {
   if (!groq) {
@@ -59,6 +106,29 @@ router.post('/chat', async (req: express.Request, res: express.Response) => {
       );
     }
 
+    let questionTexts: string[] = [];
+    if (Number.isFinite(assignmentId) && assignmentId > 0) {
+      const qRes = await query(
+        `SELECT question_text FROM assignment_questions WHERE assignment_id = $1 ORDER BY sort_order ASC`,
+        [assignmentId]
+      );
+      questionTexts = (qRes.rows as { question_text: string }[])
+        .map((r) => r.question_text)
+        .filter((t) => typeof t === 'string' && t.trim().length > 0);
+    }
+
+    if (questionTexts.length > 0 && messageMatchesAssignmentQuestion(message, questionTexts)) {
+      const text = ASSIGNMENT_QUESTION_REFUSAL;
+      if (hasChatSessionKeys) {
+        await query(
+          `INSERT INTO student_chat_messages (student_id, assignment_id, attempt_number, role, content)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [Number(studentId), assignmentId, attemptNumber, 'assistant', text]
+        );
+      }
+      return res.json({ success: true, text });
+    }
+
     // Log AI usage if studentId provided
     if (studentId && Number.isFinite(studentId)) {
       await query(
@@ -69,6 +139,7 @@ router.post('/chat', async (req: express.Request, res: express.Response) => {
 
     const systemContent = `You are a helpful AI Tutor in the Lyrning LMS.
   You must strictly follow the teacher's restrictions exactly. If a student asks for something that violates those restrictions, refuse and provide only the level of help allowed.
+  If the student's message is essentially the same as, or a near-verbatim copy of, an assignment question (even without saying "answer this"), do not solve it or give the answer — redirect them to conceptual help like you would for a blocked direct-answer request.
   Teacher's specific restrictions: ${instructions || "Don't give the student the full answer directly. Guide them with hints and examples."}
 ${assignmentContext ? `\nHere is the assignment context to help you assist the student (DO NOT reveal answers directly — guide them with hints and explanations instead):\n${assignmentContext}` : ''}`;
 

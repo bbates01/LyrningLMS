@@ -134,8 +134,6 @@ interface Props {
   assignmentId: number;
   assignmentName: string;
   assignmentMaxPoints: number;
-  allowPartialShortAnswer?: boolean;
-  allowPartialSelectAllThatApply?: boolean;
   directions?: string | null;
   questionsPreview: AssignmentQuestionPreview[];
   onClose: () => void;
@@ -147,8 +145,6 @@ const AssignmentQuestionsEditorModal: React.FC<Props> = ({
   assignmentId,
   assignmentName,
   assignmentMaxPoints,
-  allowPartialShortAnswer = false,
-  allowPartialSelectAllThatApply = false,
   directions,
   questionsPreview,
   onClose,
@@ -165,8 +161,6 @@ const AssignmentQuestionsEditorModal: React.FC<Props> = ({
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [assignmentMaxPointsInput, setAssignmentMaxPointsInput] = React.useState(String(assignmentMaxPoints));
-  const [allowPartialShortAnswerChecked, setAllowPartialShortAnswerChecked] = React.useState(Boolean(allowPartialShortAnswer));
-  const [allowPartialSelectAllThatApplyChecked, setAllowPartialSelectAllThatApplyChecked] = React.useState(Boolean(allowPartialSelectAllThatApply));
   const [questionPointValues, setQuestionPointValues] = React.useState<string[]>(
     () => initial.questions.map((q, idx) => Number(questionsPreview[idx]?.maxPoints ?? 1).toString())
   );
@@ -277,8 +271,6 @@ const AssignmentQuestionsEditorModal: React.FC<Props> = ({
   const effectiveMaxPoints = Number.isFinite(parsedMaxPoints) && parsedMaxPoints > 0 ? parsedMaxPoints : assignmentMaxPoints;
   const parsedQuestions = parseQuestionsFromDisplayText(result);
   const questionCount = parsedQuestions?.questions.length ?? 0;
-  const hasShortAnswer = Boolean(parsedQuestions?.questions.some((q) => (q.questionType || 'multiple_choice') === 'short_answer'));
-  const hasSelectAll = Boolean(parsedQuestions?.questions.some((q) => (q.questionType || 'multiple_choice') === 'select_all_that_apply'));
 
   const handleBatchUpdate = async () => {
     const parsed = parseQuestionsFromDisplayText(result);
@@ -347,8 +339,6 @@ const AssignmentQuestionsEditorModal: React.FC<Props> = ({
       });
       const saveRes = await saveAssignmentQuestions(classId, assignmentId, payload, {
         assignmentMaxPoints: effectiveMaxPoints,
-        allowPartialShortAnswer: hasShortAnswer ? allowPartialShortAnswerChecked : false,
-        allowPartialSelectAllThatApply: hasSelectAll ? allowPartialSelectAllThatApplyChecked : false,
       });
       if (!saveRes.success) {
         setError(saveRes.error || 'Failed to save questions.');
@@ -444,32 +434,6 @@ const AssignmentQuestionsEditorModal: React.FC<Props> = ({
               />
             </div>
           ))}
-          {(hasShortAnswer || hasSelectAll) && (
-            <div className="pt-2 space-y-2 border-t border-gray-200">
-              {hasShortAnswer && (
-                <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={allowPartialShortAnswerChecked}
-                    onChange={(e) => setAllowPartialShortAnswerChecked(e.target.checked)}
-                    className="rounded border-gray-300"
-                  />
-                  Allow partial credit for short answer
-                </label>
-              )}
-              {hasSelectAll && (
-                <label className="flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={allowPartialSelectAllThatApplyChecked}
-                    onChange={(e) => setAllowPartialSelectAllThatApplyChecked(e.target.checked)}
-                    className="rounded border-gray-300"
-                  />
-                  Allow partial credit for select all that apply
-                </label>
-              )}
-            </div>
-          )}
           <p
             className={`text-xs ${
               Math.abs(

@@ -19,8 +19,6 @@ interface AssignmentViewProps {
     maxPoints: number;
     allowedSubmissions: number;
     attemptScoringPolicy: 'latest' | 'highest' | 'average';
-    allowPartialShortAnswer: boolean;
-    allowPartialSelectAllThatApply: boolean;
   }) => Promise<{ success: boolean; error?: string }>;
   questionsPreview?: AssignmentQuestionPreview[];
   onQuestionsUpdated?: () => Promise<void> | void;
@@ -88,8 +86,6 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({
   const [editPolicy, setEditPolicy] = React.useState<'latest' | 'highest' | 'average'>(
     assignment.attemptScoringPolicy || 'latest'
   );
-  const [allowPartialShortAnswer, setAllowPartialShortAnswer] = React.useState(Boolean(assignment.allowPartialShortAnswer));
-  const [allowPartialSelectAllThatApply, setAllowPartialSelectAllThatApply] = React.useState(Boolean(assignment.allowPartialSelectAllThatApply));
 
   React.useEffect(() => {
     setEditName(assignment.title);
@@ -99,8 +95,6 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({
     setEditAiParams(assignment.aiInstructions || '');
     setEditAllowedSubmissions(String(assignment.allowedSubmissions ?? 1));
     setEditPolicy(assignment.attemptScoringPolicy || 'latest');
-    setAllowPartialShortAnswer(Boolean(assignment.allowPartialShortAnswer));
-    setAllowPartialSelectAllThatApply(Boolean(assignment.allowPartialSelectAllThatApply));
   }, [assignment]);
 
   const handleSave = async () => {
@@ -128,8 +122,6 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({
       maxPoints: Number(assignment.maxPoints ?? 100),
       allowedSubmissions: allowed,
       attemptScoringPolicy: allowed > 1 ? editPolicy : 'latest',
-      allowPartialShortAnswer,
-      allowPartialSelectAllThatApply,
     });
     setSaving(false);
     if (!res.success) {
@@ -284,8 +276,6 @@ const AssignmentView: React.FC<AssignmentViewProps> = ({
         assignmentId={Number(assignment.id)}
         assignmentName={assignment.title}
         assignmentMaxPoints={Number(assignment.maxPoints ?? 100)}
-        allowPartialShortAnswer={Boolean(assignment.allowPartialShortAnswer)}
-        allowPartialSelectAllThatApply={Boolean(assignment.allowPartialSelectAllThatApply)}
         directions={assignment.description}
         questionsPreview={questionsPreview}
         onClose={() => setShowEditQuestionsModal(false)}

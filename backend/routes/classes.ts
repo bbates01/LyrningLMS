@@ -751,8 +751,7 @@ router.get('/:classId/assignments', async (req, res) => {
     const { classId } = req.params;
     const result = await query(
       `SELECT assignment_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions,
-              COALESCE(keep_type, attempt_scoring_policy) AS attempt_scoring_policy,
-              allow_partial_short_answer, allow_partial_select_all_that_apply
+              COALESCE(keep_type, attempt_scoring_policy) AS attempt_scoring_policy
        FROM assignments
        WHERE class_id = $1
        ORDER BY due_date ASC NULLS LAST`,
@@ -779,8 +778,6 @@ router.put('/:classId/assignments/:assignmentId', async (req, res) => {
       maxPoints,
       allowedSubmissions,
       attemptScoringPolicy,
-      allowPartialShortAnswer,
-      allowPartialSelectAllThatApply,
     } = req.body as {
       teacherId?: number;
       assignmentName?: string;
@@ -790,8 +787,6 @@ router.put('/:classId/assignments/:assignmentId', async (req, res) => {
       maxPoints?: number;
       allowedSubmissions?: number;
       attemptScoringPolicy?: string;
-      allowPartialShortAnswer?: boolean;
-      allowPartialSelectAllThatApply?: boolean;
     };
 
     if (!Number.isFinite(classId) || !Number.isFinite(assignmentId) || !Number.isFinite(Number(teacherId))) {
@@ -837,12 +832,9 @@ router.put('/:classId/assignments/:assignmentId', async (req, res) => {
            max_points = $5,
            allowed_submissions = $6,
            keep_type = $7,
-           attempt_scoring_policy = $7,
-           allow_partial_short_answer = $8,
-           allow_partial_select_all_that_apply = $9
-       WHERE assignment_id = $10 AND class_id = $11
-       RETURNING assignment_id, assignment_name, description, due_date, ai_params, max_points, allowed_submissions, keep_type,
-                 allow_partial_short_answer, allow_partial_select_all_that_apply`,
+           attempt_scoring_policy = $7
+       WHERE assignment_id = $8 AND class_id = $9
+       RETURNING assignment_id, assignment_name, description, due_date, ai_params, max_points, allowed_submissions, keep_type`,
       [
         assignmentName.trim(),
         description ?? null,
@@ -851,8 +843,6 @@ router.put('/:classId/assignments/:assignmentId', async (req, res) => {
         maxPointsNum,
         allowedSubmissionsNum,
         scoringPolicy,
-        Boolean(allowPartialShortAnswer),
-        Boolean(allowPartialSelectAllThatApply),
         assignmentId,
         classId,
       ]
@@ -974,8 +964,6 @@ router.post('/:classId/assignments', async (req, res) => {
       questionTypes,
       allowedSubmissions,
       attemptScoringPolicy,
-      allowPartialShortAnswer,
-      allowPartialSelectAllThatApply,
       pdfSummary,
     } = req.body as {
       teacherId?: number;
@@ -988,8 +976,6 @@ router.post('/:classId/assignments', async (req, res) => {
       questionTypes?: string;
       allowedSubmissions?: number;
       attemptScoringPolicy?: string;
-      allowPartialShortAnswer?: boolean;
-      allowPartialSelectAllThatApply?: boolean;
       pdfSummary?: string;
     };
 
@@ -1030,10 +1016,9 @@ router.post('/:classId/assignments', async (req, res) => {
       typeof questionTypes === 'string' ? questionTypes : Array.isArray(questionTypes) ? (questionTypes as string[]).join(',') : null;
 
     const insertResult = await query(
-      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions, keep_type, attempt_scoring_policy, allow_partial_short_answer, allow_partial_select_all_that_apply, pdf_summary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14)
-       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions, keep_type,
-                 allow_partial_short_answer, allow_partial_select_all_that_apply, pdf_summary`,
+      `INSERT INTO assignments (class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions, keep_type, attempt_scoring_policy, pdf_summary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)
+       RETURNING assignment_id, class_id, assignment_name, description, type, max_points, due_date, assignment_link, ai_params, question_types, allowed_submissions, keep_type, pdf_summary`,
       [
         classId,
         assignmentName,
@@ -1046,8 +1031,6 @@ router.post('/:classId/assignments', async (req, res) => {
         questionTypesStr ?? null,
         allowedSubmissionsNum,
         scoringPolicy,
-        Boolean(allowPartialShortAnswer),
-        Boolean(allowPartialSelectAllThatApply),
         pdfSummary ?? null,
       ]
     );
@@ -1143,7 +1126,7 @@ router.get('/assignments/link/:link', async (req, res) => {
 router.post('/:classId/assignments/:assignmentId/questions', async (req, res) => {
   try {
     const { classId, assignmentId } = req.params;
-    const { questions, assignmentMaxPoints, allowPartialShortAnswer, allowPartialSelectAllThatApply } = req.body as {
+    const { questions, assignmentMaxPoints } = req.body as {
       questions?: {
         questionText: string;
         questionType?: string;
@@ -1153,8 +1136,6 @@ router.post('/:classId/assignments/:assignmentId/questions', async (req, res) =>
         falseAnswers: string[];
       }[];
       assignmentMaxPoints?: number;
-      allowPartialShortAnswer?: boolean;
-      allowPartialSelectAllThatApply?: boolean;
     };
 
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
@@ -1212,20 +1193,11 @@ router.post('/:classId/assignments/:assignmentId/questions', async (req, res) =>
 
     await query('BEGIN');
     try {
-      await query(
-        `UPDATE assignments
-         SET max_points = $1,
-             allow_partial_short_answer = COALESCE($2, allow_partial_short_answer),
-             allow_partial_select_all_that_apply = COALESCE($3, allow_partial_select_all_that_apply)
-         WHERE assignment_id = $4 AND class_id = $5`,
-        [
-          assignmentMaxPointsValue,
-          typeof allowPartialShortAnswer === 'boolean' ? allowPartialShortAnswer : null,
-          typeof allowPartialSelectAllThatApply === 'boolean' ? allowPartialSelectAllThatApply : null,
-          assignmentIdNum,
-          classIdNum,
-        ]
-      );
+      await query(`UPDATE assignments SET max_points = $1 WHERE assignment_id = $2 AND class_id = $3`, [
+        assignmentMaxPointsValue,
+        assignmentIdNum,
+        classIdNum,
+      ]);
       await query(
         `DELETE FROM assignment_question_options
          WHERE question_id IN (
@@ -1327,8 +1299,7 @@ router.get('/:classId/grades', async (req, res) => {
     // Fetch all assignments for the class
     const assignmentsResult = await query(
       `SELECT assignment_id, assignment_name, description, ai_params, type, max_points, due_date, allowed_submissions,
-              COALESCE(keep_type, attempt_scoring_policy) AS keep_type,
-              allow_partial_short_answer, allow_partial_select_all_that_apply
+              COALESCE(keep_type, attempt_scoring_policy) AS keep_type
        FROM assignments
        WHERE class_id = $1
        ORDER BY due_date ASC NULLS LAST`,
@@ -1403,8 +1374,6 @@ router.get('/:classId/grades', async (req, res) => {
         dueDate: a.due_date,
         allowedSubmissions: a.allowed_submissions,
         attemptScoringPolicy: a.keep_type,
-        allowPartialShortAnswer: Boolean(a.allow_partial_short_answer),
-        allowPartialSelectAllThatApply: Boolean(a.allow_partial_select_all_that_apply),
         averages: {
           accuracy: avg(submitted.map((s) => s.percentage)),
           understanding: avg(submitted.map((s) => s.understandingScore)),

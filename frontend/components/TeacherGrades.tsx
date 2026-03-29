@@ -171,8 +171,6 @@ const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => 
         maxPoints: Number(editingAssignment.maxPoints ?? 100),
         allowedSubmissions: allowed,
         attemptScoringPolicy: allowed > 1 ? editScoringPolicy : 'latest',
-        allowPartialShortAnswer: Boolean(editingAssignment.allowPartialShortAnswer),
-        allowPartialSelectAllThatApply: Boolean(editingAssignment.allowPartialSelectAllThatApply),
       });
       if (!res.success) {
         setEditError(res.error || 'Failed to update assignment.');
@@ -512,8 +510,6 @@ const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => 
           assignmentId={editingAssignment.assignmentId}
           assignmentName={editingAssignment.assignmentName}
           assignmentMaxPoints={editingAssignment.maxPoints}
-          allowPartialShortAnswer={Boolean(editingAssignment.allowPartialShortAnswer)}
-          allowPartialSelectAllThatApply={Boolean(editingAssignment.allowPartialSelectAllThatApply)}
           directions={editingAssignment.description}
           questionsPreview={editQuestionsPreview}
           onClose={() => {

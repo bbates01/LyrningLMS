@@ -68,17 +68,17 @@ export async function runMigrations(): Promise<void> {
       `SELECT 1 FROM information_schema.columns
        WHERE table_schema = 'public' AND table_name = 'assignments' AND column_name = 'allow_partial_short_answer' LIMIT 1`
     );
-    if (hasPartialShort.rows.length === 0) {
-      await query(`ALTER TABLE assignments ADD COLUMN allow_partial_short_answer BOOLEAN NOT NULL DEFAULT FALSE`);
-      console.log('Migration: added assignments.allow_partial_short_answer');
+    if (hasPartialShort.rows.length > 0) {
+      await query(`ALTER TABLE assignments DROP COLUMN allow_partial_short_answer`);
+      console.log('Migration: dropped assignments.allow_partial_short_answer');
     }
     const hasPartialSata = await query(
       `SELECT 1 FROM information_schema.columns
        WHERE table_schema = 'public' AND table_name = 'assignments' AND column_name = 'allow_partial_select_all_that_apply' LIMIT 1`
     );
-    if (hasPartialSata.rows.length === 0) {
-      await query(`ALTER TABLE assignments ADD COLUMN allow_partial_select_all_that_apply BOOLEAN NOT NULL DEFAULT FALSE`);
-      console.log('Migration: added assignments.allow_partial_select_all_that_apply');
+    if (hasPartialSata.rows.length > 0) {
+      await query(`ALTER TABLE assignments DROP COLUMN allow_partial_select_all_that_apply`);
+      console.log('Migration: dropped assignments.allow_partial_select_all_that_apply');
     }
     const hasQuestionMaxPoints = await query(
       `SELECT 1 FROM information_schema.columns

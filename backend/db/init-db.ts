@@ -78,15 +78,13 @@ async function main() {
         await pool.query(`ALTER TABLE assignments ADD COLUMN keep_type TEXT NOT NULL DEFAULT 'latest';`);
         await pool.query(`UPDATE assignments SET keep_type = COALESCE(NULLIF(attempt_scoring_policy, ''), 'latest');`);
       }
-      const hasPartialShort = await columnExists('assignments', 'allow_partial_short_answer');
-      if (!hasPartialShort) {
-        console.log('Migrating: adding assignments.allow_partial_short_answer');
-        await pool.query(`ALTER TABLE assignments ADD COLUMN allow_partial_short_answer BOOLEAN NOT NULL DEFAULT FALSE;`);
+      if (await columnExists('assignments', 'allow_partial_short_answer')) {
+        console.log('Migrating: dropping assignments.allow_partial_short_answer');
+        await pool.query(`ALTER TABLE assignments DROP COLUMN allow_partial_short_answer;`);
       }
-      const hasPartialSata = await columnExists('assignments', 'allow_partial_select_all_that_apply');
-      if (!hasPartialSata) {
-        console.log('Migrating: adding assignments.allow_partial_select_all_that_apply');
-        await pool.query(`ALTER TABLE assignments ADD COLUMN allow_partial_select_all_that_apply BOOLEAN NOT NULL DEFAULT FALSE;`);
+      if (await columnExists('assignments', 'allow_partial_select_all_that_apply')) {
+        console.log('Migrating: dropping assignments.allow_partial_select_all_that_apply');
+        await pool.query(`ALTER TABLE assignments DROP COLUMN allow_partial_select_all_that_apply;`);
       }
     }
     if (await tableExists('assignment_questions')) {

@@ -62,8 +62,6 @@ export interface Assignment {
   maxPoints?: number;
   allowedSubmissions?: number;
   attemptScoringPolicy?: 'latest' | 'highest' | 'average';
-  allowPartialShortAnswer?: boolean;
-  allowPartialSelectAllThatApply?: boolean;
   materials?: string[];
   assignmentLink?: string;
 }

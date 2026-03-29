@@ -342,7 +342,6 @@ async function ensureStudentCanAccess(studentId: number, classId: number, assign
   const assignmentRes = await query(
     `SELECT assignment_id, class_id, assignment_name, description, type, max_points, due_date, allowed_submissions,
             COALESCE(keep_type, attempt_scoring_policy) AS keep_type,
-            allow_partial_short_answer, allow_partial_select_all_that_apply,
             ai_params, pdf_summary
      FROM assignments
      WHERE assignment_id = $1 AND class_id = $2`,
@@ -382,8 +381,6 @@ async function ensureStudentCanAccess(studentId: number, classId: number, assign
     due_date: string | null;
     allowed_submissions: number;
     keep_type: string | null;
-    allow_partial_short_answer: boolean;
-    allow_partial_select_all_that_apply: boolean;
     ai_params: string | null;
     pdf_summary: string | null;
   } };
@@ -570,9 +567,6 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
 
     let possiblePointsTotal = 0;
     let earnedPointsTotal = 0;
-    const allowPartialShortAnswer = Boolean(access.assignment.allow_partial_short_answer);
-    const allowPartialSata = Boolean(access.assignment.allow_partial_select_all_that_apply);
-
     const attemptNumber = attemptsUsed + 1;
     const questionResults: { questionId: number; isCorrect: number | null }[] = [];
 
@@ -592,24 +586,16 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
           correctnessScore = 0;
         } else if (groq) {
           try {
-            const gradingInstruction = allowPartialShortAnswer
-              ? 'Reply with only one number from 0.00 to 1.00 representing fractional correctness (0 = incorrect, 1 = fully correct).'
-              : 'Reply with only "1" for correct or "0" for incorrect.';
             const completion = await groq.chat.completions.create({
               model: GROQ_MODEL,
               messages: [{
                 role: 'user',
-                content: `You are grading a short answer question. Be reasonably lenient and focus on demonstrated understanding.\n\nQuestion: "${q.questionText}"\nExpected answer: "${expectedAnswer}"\nStudent's answer: "${studentResponse}"\nPartial credit allowed: ${allowPartialShortAnswer ? 'yes' : 'no'}\n\n${gradingInstruction}`,
+                content: `You are grading a short answer question. Be reasonably lenient and focus on demonstrated understanding.\n\nQuestion: "${q.questionText}"\nExpected answer: "${expectedAnswer}"\nStudent's answer: "${studentResponse}"\n\nReply with only "1" for correct or "0" for incorrect.`,
               }],
               max_tokens: 5,
             });
             const result = completion.choices[0]?.message?.content?.trim();
-            if (allowPartialShortAnswer) {
-              const parsed = Number(result);
-              correctnessScore = Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0;
-            } else {
-              correctnessScore = result === '1' ? 1 : 0;
-            }
+            correctnessScore = result === '1' ? 1 : 0;
           } catch {
             // Fallback to case-insensitive string match if AI fails
             correctnessScore = studentResponse.toLowerCase() === expectedAnswer.toLowerCase() ? 1 : 0;
@@ -623,14 +609,7 @@ router.post('/assignments/:classId/:assignmentId/submit', requireStudentAuth, as
         const correct = new Set(q.options.filter((o) => o.is_correct === 1).map((o) => Number(o.option_id)));
 
         if (type === 'select_all_that_apply') {
-          if (allowPartialSata) {
-            const correctSelected = Array.from(correct).filter((id) => selected.has(id)).length;
-            const incorrectSelected = Array.from(selected).filter((id) => !correct.has(id)).length;
-            const denom = Math.max(1, correct.size);
-            correctnessScore = Math.max(0, Math.min(1, (correctSelected - incorrectSelected) / denom));
-          } else {
-            correctnessScore = selected.size === correct.size && Array.from(correct).every((id) => selected.has(id)) ? 1 : 0;
-          }
+          correctnessScore = selected.size === correct.size && Array.from(correct).every((id) => selected.has(id)) ? 1 : 0;
         } else {
           correctnessScore = selected.size === 1 && correct.size === 1 && selected.has(Array.from(correct)[0]) ? 1 : 0;
         }

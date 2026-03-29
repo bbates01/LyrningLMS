@@ -62,8 +62,6 @@ CREATE TABLE assignments (
     allowed_submissions INTEGER NOT NULL DEFAULT 1,
     keep_type       TEXT NOT NULL DEFAULT 'latest',
     attempt_scoring_policy TEXT NOT NULL DEFAULT 'latest',
-    allow_partial_short_answer BOOLEAN NOT NULL DEFAULT FALSE,
-    allow_partial_select_all_that_apply BOOLEAN NOT NULL DEFAULT FALSE,
     pdf_summary     TEXT
 );
 

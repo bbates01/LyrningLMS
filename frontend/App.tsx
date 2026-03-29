@@ -47,8 +47,6 @@ function mapApiAssignmentToAssignment(row: {
   ai_params?: string | null;
   allowed_submissions?: number;
   attempt_scoring_policy?: 'latest' | 'highest' | 'average' | string | null;
-  allow_partial_short_answer?: boolean | null;
-  allow_partial_select_all_that_apply?: boolean | null;
 }): Assignment {
   const typeStr = (row.type || 'homework').toLowerCase();
   const typeMap: Record<string, string> = {
@@ -78,8 +76,6 @@ function mapApiAssignmentToAssignment(row: {
       row.attempt_scoring_policy === 'highest' || row.attempt_scoring_policy === 'average'
         ? row.attempt_scoring_policy
         : 'latest',
-    allowPartialShortAnswer: Boolean(row.allow_partial_short_answer),
-    allowPartialSelectAllThatApply: Boolean(row.allow_partial_select_all_that_apply),
   };
 }
 
@@ -436,8 +432,6 @@ const App: React.FC = () => {
                     maxPoints: updates.maxPoints,
                     allowedSubmissions: updates.allowedSubmissions,
                     attemptScoringPolicy: updates.attemptScoringPolicy,
-                    allowPartialShortAnswer: updates.allowPartialShortAnswer,
-                    allowPartialSelectAllThatApply: updates.allowPartialSelectAllThatApply,
                   }
                 );
                 if (!res.success) return { success: false, error: res.error || 'Failed to update assignment' };

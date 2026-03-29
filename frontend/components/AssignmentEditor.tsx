@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { Pencil, Upload, CheckCircle2 } from './Icons';
 import { generateAssignmentQuestions, batchUpdateQuestions, extractPdfText, type GenerateQuestionsResponse } from '../services/aiService';
 import { uploadAssignmentPdf, createAssignment, saveAssignmentQuestions } from '../services/api';
@@ -128,8 +128,6 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
   const [assignmentMaxPointsInput, setAssignmentMaxPointsInput] = useState('100');
   const [allowedSubmissionsInput, setAllowedSubmissionsInput] = useState('1');
   const [attemptScoringPolicy, setAttemptScoringPolicy] = useState<'latest' | 'highest' | 'average'>('latest');
-  const [allowPartialShortAnswer, setAllowPartialShortAnswer] = useState(false);
-  const [allowPartialSelectAllThatApply, setAllowPartialSelectAllThatApply] = useState(false);
   const [questionPointValues, setQuestionPointValues] = useState<string[]>([]);
   const [result, setResult] = useState('');
   const [questionsData, setQuestionsData] = useState<GenerateQuestionsResponse | null>(null);
@@ -278,15 +276,6 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
     return distributeByWeights(totalPoints, questionWeights);
   };
 
-  useEffect(() => {
-    if (!questionTypes.includes('short_answer') && allowPartialShortAnswer) {
-      setAllowPartialShortAnswer(false);
-    }
-    if (!questionTypes.includes('select_all_that_apply') && allowPartialSelectAllThatApply) {
-      setAllowPartialSelectAllThatApply(false);
-    }
-  }, [questionTypes, allowPartialShortAnswer, allowPartialSelectAllThatApply]);
-
   const handleGenerate = async () => {
     if (!title.trim()) {
       setUploadError('Please enter an assignment title before generating questions.');
@@ -423,8 +412,6 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
         parsedMaxPoints,
         parsedAllowedSubmissions,
         parsedAllowedSubmissions > 1 ? attemptScoringPolicy : 'latest',
-        allowPartialShortAnswer,
-        allowPartialSelectAllThatApply,
         assignmentType,
         pdfSummary
       );
@@ -464,7 +451,7 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
       confirmInProgressRef.current = false;
       setIsSaving(false);
     }
-  }, [classId, teacherId, title, dueDate, noDueDate, questionsData, aiParams, questionTypes, pendingFiles, onAssignmentCreated, pdfSummary, allowedSubmissionsInput, attemptScoringPolicy, allowPartialShortAnswer, allowPartialSelectAllThatApply, assignmentType, assignmentMaxPointsInput, questionPointValues]);
+  }, [classId, teacherId, title, dueDate, noDueDate, questionsData, aiParams, questionTypes, pendingFiles, onAssignmentCreated, pdfSummary, allowedSubmissionsInput, attemptScoringPolicy, assignmentType, assignmentMaxPointsInput, questionPointValues]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -635,32 +622,6 @@ const AssignmentEditor: React.FC<Props> = ({ classId, teacherId, onAssignmentCre
                 </label>
               ))}
             </div>
-            {(questionTypes.includes('short_answer') || questionTypes.includes('select_all_that_apply')) && (
-              <div className="pt-2 space-y-2">
-                {questionTypes.includes('short_answer') && (
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={allowPartialShortAnswer}
-                      onChange={(e) => setAllowPartialShortAnswer(e.target.checked)}
-                      className="rounded border-gray-300"
-                    />
-                    Allow partial credit for short answer
-                  </label>
-                )}
-                {questionTypes.includes('select_all_that_apply') && (
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={allowPartialSelectAllThatApply}
-                      onChange={(e) => setAllowPartialSelectAllThatApply(e.target.checked)}
-                      className="rounded border-gray-300"
-                    />
-                    Allow partial credit for select all that apply
-                  </label>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-gray-100 space-y-4">

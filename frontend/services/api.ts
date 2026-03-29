@@ -115,8 +115,6 @@ export interface AssignmentRow {
   question_types?: string | null;
   allowed_submissions?: number;
   attempt_scoring_policy?: 'latest' | 'highest' | 'average' | string | null;
-  allow_partial_short_answer?: boolean | null;
-  allow_partial_select_all_that_apply?: boolean | null;
 }
 
 export async function fetchClassAssignments(classId: number): Promise<AssignmentRow[]> {
@@ -169,8 +167,6 @@ export async function createAssignment(
   maxPoints?: number,
   allowedSubmissions?: number,
   attemptScoringPolicy?: 'latest' | 'highest' | 'average',
-  allowPartialShortAnswer?: boolean,
-  allowPartialSelectAllThatApply?: boolean,
   assignmentType?: string,
   pdfSummary?: string | null
 ): Promise<{ success: boolean; assignmentId?: number; error?: string }> {
@@ -188,8 +184,6 @@ export async function createAssignment(
       maxPoints: typeof maxPoints === 'number' ? maxPoints : 100,
       allowedSubmissions: typeof allowedSubmissions === 'number' ? allowedSubmissions : 1,
       attemptScoringPolicy: attemptScoringPolicy ?? 'latest',
-      allowPartialShortAnswer: Boolean(allowPartialShortAnswer),
-      allowPartialSelectAllThatApply: Boolean(allowPartialSelectAllThatApply),
       pdfSummary: pdfSummary ?? null,
     }),
   });
@@ -210,8 +204,6 @@ export async function updateAssignment(
     maxPoints?: number;
     allowedSubmissions?: number;
     attemptScoringPolicy?: 'latest' | 'highest' | 'average';
-    allowPartialShortAnswer?: boolean;
-    allowPartialSelectAllThatApply?: boolean;
   }
 ): Promise<{ success: boolean; assignment?: any; error?: string }> {
   const res = await fetch(`${API_BASE}/api/classes/${classId}/assignments/${assignmentId}`, {
@@ -239,8 +231,6 @@ export async function saveAssignmentQuestions(
   questions: SavedQuestionPayload[],
   options?: {
     assignmentMaxPoints?: number;
-    allowPartialShortAnswer?: boolean;
-    allowPartialSelectAllThatApply?: boolean;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const res = await fetch(
@@ -251,8 +241,6 @@ export async function saveAssignmentQuestions(
       body: JSON.stringify({
         questions,
         assignmentMaxPoints: options?.assignmentMaxPoints,
-        allowPartialShortAnswer: options?.allowPartialShortAnswer,
-        allowPartialSelectAllThatApply: options?.allowPartialSelectAllThatApply,
       }),
     }
   );
@@ -318,8 +306,6 @@ export interface AssignmentGradeSummary {
   dueDate: string | null;
   allowedSubmissions?: number;
   attemptScoringPolicy?: 'latest' | 'highest' | 'average' | string | null;
-  allowPartialShortAnswer?: boolean;
-  allowPartialSelectAllThatApply?: boolean;
   averages?: {
     accuracy: number | null;
     understanding: number | null;
