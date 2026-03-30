@@ -15,6 +15,8 @@ import AdminLayout from './components/AdminLayout';
 import AdminClassSelect from './components/AdminClassSelect';
 import AdminClassDetail from './components/AdminClassDetail';
 import AdminGlobalMetrics from './components/AdminGlobalMetrics';
+import Home from './components/Home';
+import Contact from './components/Contact';
 import { ViewState, UserSession, Assignment, ClassSummary, UserRole } from './types';
 import { BookOpen, Trash2 } from './components/Icons';
 import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, updateAssignment, type AssignmentQuestionPreview } from './services/api';
@@ -280,9 +282,7 @@ const App: React.FC = () => {
     setView('LOGIN');
     setSelectedClass(null);
     setSelectedAssignment(null);
-    if (window.location.pathname === '/admin') {
-      window.history.replaceState({}, '', '/');
-    }
+    window.history.replaceState({}, '', '/');
   };
 
   const handleSelectClass = (cls: ClassSummary) => {
@@ -406,6 +406,10 @@ const App: React.FC = () => {
     }
   }
 
+  if (window.location.pathname === '/contact') {
+    return <Contact />;
+  }
+
   if (session?.role === UserRole.ADMIN && session.adminToken) {
     return (
       <AdminLayout
@@ -434,8 +438,12 @@ const App: React.FC = () => {
     return <AdminLogin onLogin={handleAdminLogin} />;
   }
 
-  if (!session || view === 'LOGIN') {
+  if (window.location.pathname === '/login') {
     return <Login onLogin={handleTeacherLogin} />;
+  }
+
+  if (!session || view === 'LOGIN') {
+    return <Home />;
   }
 
   const renderContent = () => {
