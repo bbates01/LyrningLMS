@@ -1508,6 +1508,77 @@ router.get('/:classId/metrics/students/:studentId', async (req, res) => {
   }
 });
 
+// GET /api/classes/:classId/metrics/class-averages — per-week class-wide averages (mean across enrolled students)
+router.get('/:classId/metrics/class-averages', async (req, res) => {
+  try {
+    const classId = Number(req.params.classId);
+    if (!Number.isFinite(classId)) {
+      return res.status(400).json({ success: false, error: 'Invalid class id' });
+    }
+
+    const weeklyRes = await query(
+      `SELECT
+         sm.week_start_date,
+         sm.week_end_date,
+         sm.week_number,
+         AVG(sm.accuracy_score) FILTER (WHERE sm.accuracy_score IS NOT NULL) AS avg_accuracy,
+         AVG(sm.ai_dependency_score) FILTER (WHERE sm.ai_dependency_score IS NOT NULL) AS avg_ai_dependency,
+         AVG(sm.understanding_score) FILTER (WHERE sm.understanding_score IS NOT NULL) AS avg_understanding
+       FROM student_metrics sm
+       INNER JOIN student_classes sc
+         ON sc.student_id = sm.student_id AND sc.class_id = sm.class_id
+       WHERE sm.class_id = $1 AND LOWER(TRIM(sc.status)) = 'active'
+       GROUP BY sm.week_start_date, sm.week_end_date, sm.week_number
+       ORDER BY sm.week_start_date DESC NULLS LAST, sm.week_number DESC
+       LIMIT 8`,
+      [classId]
+    );
+
+    const rows = weeklyRes.rows as Array<{
+      week_start_date: string | null;
+      week_end_date: string | null;
+      week_number: number | null;
+      avg_accuracy: string | number | null;
+      avg_ai_dependency: string | number | null;
+      avg_understanding: string | number | null;
+    }>;
+
+    const weekly = [...rows]
+      .reverse()
+      .map((row) => ({
+        weekNumber: Number(row.week_number),
+        weekStartDate: row.week_start_date ?? '',
+        weekEndDate: row.week_end_date ?? '',
+        accuracy: row.avg_accuracy != null ? Number(row.avg_accuracy) : null,
+        aiDependency: row.avg_ai_dependency != null ? Number(row.avg_ai_dependency) : null,
+        understanding: row.avg_understanding != null ? Number(row.avg_understanding) : null,
+      }));
+
+    const latest = rows[0];
+    const currentAverages =
+      latest == null
+        ? null
+        : {
+            accuracy: latest.avg_accuracy != null ? Number(latest.avg_accuracy) : null,
+            aiDependency: latest.avg_ai_dependency != null ? Number(latest.avg_ai_dependency) : null,
+            understanding: latest.avg_understanding != null ? Number(latest.avg_understanding) : null,
+          };
+    const currentWeekMeta =
+      latest == null
+        ? null
+        : {
+            weekNumber: Number(latest.week_number),
+            weekStartDate: latest.week_start_date ?? '',
+            weekEndDate: latest.week_end_date ?? '',
+          };
+
+    return res.json({ success: true, weekly, currentAverages, currentWeek: currentWeekMeta });
+  } catch (err) {
+    console.error('Error fetching class metric averages:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch class metric averages' });
+  }
+});
+
 // GET /api/classes/assignments/:assignmentId/pdf — no longer supported (PDFs not stored)
 router.get('/assignments/:assignmentId/pdf', async (_req, res) => {
   return res

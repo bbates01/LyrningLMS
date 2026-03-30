@@ -369,6 +369,40 @@ export async function fetchStudentMetricHistory(
   return { student: data.student, history: data.history ?? [] };
 }
 
+export interface ClassMetricWeekAverage {
+  weekNumber: number;
+  weekStartDate: string;
+  weekEndDate: string;
+  accuracy: number | null;
+  aiDependency: number | null;
+  understanding: number | null;
+}
+
+export interface ClassMetricAveragesPayload {
+  weekly: ClassMetricWeekAverage[];
+  currentAverages: {
+    accuracy: number | null;
+    aiDependency: number | null;
+    understanding: number | null;
+  } | null;
+  currentWeek: {
+    weekNumber: number;
+    weekStartDate: string;
+    weekEndDate: string;
+  } | null;
+}
+
+export async function fetchClassMetricAverages(classId: number): Promise<ClassMetricAveragesPayload> {
+  const res = await fetch(`${API_BASE}/api/classes/${classId}/metrics/class-averages`);
+  const data = await res.json();
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch class metric averages');
+  return {
+    weekly: data.weekly ?? [],
+    currentAverages: data.currentAverages ?? null,
+    currentWeek: data.currentWeek ?? null,
+  };
+}
+
 export interface StudentAssignmentQuestion {
   questionId: number;
   sortOrder: number;

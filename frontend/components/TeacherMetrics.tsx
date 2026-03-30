@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchClassMetricStudents,
   fetchStudentMetricHistory,
+  fetchClassMetricAverages,
   type ClassMetricStudentSummary,
   type StudentMetricHistoryPoint,
+  type ClassMetricWeekAverage,
+  type ClassMetricAveragesPayload,
 } from '../services/api';
 import {
   LineChart,
@@ -40,6 +43,18 @@ function fmtScore(v: number | null): string {
   return v == null ? '--' : `${Math.round(v)}%`;
 }
 
+function fmtWeekRange(start: string, end: string): string {
+  if (!start?.trim() && !end?.trim()) return '';
+  try {
+    const s = new Date(start);
+    const e = new Date(end);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return '';
+    return `${s.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${e.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  } catch {
+    return '';
+  }
+}
+
 const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
   const STUDENTS_PER_PAGE = 8;
   const [level, setLevel] = useState<MetricsLevel>('student_list');
@@ -54,6 +69,14 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
   const [history, setHistory] = useState<StudentMetricHistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [showClassAveragesModal, setShowClassAveragesModal] = useState(false);
+  const [classAvgLoading, setClassAvgLoading] = useState(false);
+  const [classAvgError, setClassAvgError] = useState<string | null>(null);
+  const [classAvgWeekly, setClassAvgWeekly] = useState<ClassMetricWeekAverage[]>([]);
+  const [classAvgCurrent, setClassAvgCurrent] = useState<ClassMetricAveragesPayload['currentAverages']>(null);
+  const [classAvgWeekMeta, setClassAvgWeekMeta] = useState<ClassMetricAveragesPayload['currentWeek']>(null);
+  const [classAvgSelectedMetric, setClassAvgSelectedMetric] = useState<MetricKey>('accuracy');
 
   useEffect(() => {
     let cancelled = false;
@@ -173,6 +196,37 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
     };
   }, [history]);
 
+  const classAvgChartData = useMemo(() => {
+    return classAvgWeekly.map((h, index) => ({
+      weekLabel: `Week ${index + 1}`,
+      value:
+        classAvgSelectedMetric === 'accuracy'
+          ? h.accuracy
+          : classAvgSelectedMetric === 'aiDependency'
+            ? h.aiDependency
+            : h.understanding,
+    }));
+  }, [classAvgWeekly, classAvgSelectedMetric]);
+
+  const openClassAveragesModal = useCallback(async () => {
+    setShowClassAveragesModal(true);
+    setClassAvgLoading(true);
+    setClassAvgError(null);
+    try {
+      const data = await fetchClassMetricAverages(classId);
+      setClassAvgWeekly(data.weekly);
+      setClassAvgCurrent(data.currentAverages);
+      setClassAvgWeekMeta(data.currentWeek);
+    } catch (err) {
+      setClassAvgError(err instanceof Error ? err.message : 'Failed to load class averages.');
+      setClassAvgWeekly([]);
+      setClassAvgCurrent(null);
+      setClassAvgWeekMeta(null);
+    } finally {
+      setClassAvgLoading(false);
+    }
+  }, [classId]);
+
   const learnMoreModal = showLearnMore ? (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -222,6 +276,136 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
             </p>
           </div>
         </div>
+      </div>
+    </div>
+  ) : null;
+
+  const classAveragesModal = showClassAveragesModal ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={() => setShowClassAveragesModal(false)}
+    >
+      <div
+        className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-bold text-black">Class averages</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Mean of each metric across enrolled students, by week (up to 8 most recent weeks).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowClassAveragesModal(false)}
+            className="text-gray-500 hover:text-gray-700 shrink-0"
+            aria-label="Close"
+          >
+            x
+          </button>
+        </div>
+
+        {classAvgLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-8 h-8 border-4 border-gray-200 border-t-[#ba3638] rounded-full animate-spin" />
+          </div>
+        ) : classAvgError ? (
+          <p className="text-red-600 text-sm">{classAvgError}</p>
+        ) : classAvgWeekly.length === 0 ? (
+          <p className="text-gray-600 text-sm">
+            No class weekly metrics yet. Averages appear after students submit graded work and weekly rollups are recorded.
+          </p>
+        ) : (
+          <>
+            {classAvgCurrent && classAvgWeekMeta && (
+              <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 space-y-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Latest week (class average)</p>
+                  <p className="text-sm text-gray-700">
+                    {fmtWeekRange(classAvgWeekMeta.weekStartDate, classAvgWeekMeta.weekEndDate) || `Week ${classAvgWeekMeta.weekNumber}`}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${metricBadgeClass('accuracy')}`}>
+                    Accuracy {fmtScore(classAvgCurrent.accuracy)}
+                  </span>
+                  <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${metricBadgeClass('aiDependency')}`}>
+                    AI Dependency {fmtScore(classAvgCurrent.aiDependency)}
+                  </span>
+                  <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${metricBadgeClass('understanding')}`}>
+                    Understanding {fmtScore(classAvgCurrent.understanding)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="flex flex-wrap gap-2 mb-3">
+                {(['understanding', 'accuracy', 'aiDependency'] as MetricKey[]).map((metric) => (
+                  <button
+                    key={metric}
+                    type="button"
+                    onClick={() => setClassAvgSelectedMetric(metric)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      classAvgSelectedMetric === metric ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {METRIC_META[metric].label}
+                  </button>
+                ))}
+              </div>
+              <h4 className="text-lg font-semibold text-center text-black mb-2">
+                Class average: {METRIC_META[classAvgSelectedMetric].label} over time
+              </h4>
+              <div className="h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={classAvgChartData}>
+                    <CartesianGrid stroke="#e5e7eb" />
+                    <XAxis dataKey="weekLabel" tick={{ fontSize: 11 }} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value: number | null) => `${Math.round(Number(value ?? 0))}%`} />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke={METRIC_META[classAvgSelectedMetric].color}
+                      strokeWidth={3}
+                      dot={{ r: 4, fill: METRIC_META[classAvgSelectedMetric].color }}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="p-2 font-semibold text-gray-700">Week</th>
+                    <th className="p-2 font-semibold text-gray-700">Dates</th>
+                    <th className="p-2 font-semibold text-blue-800">Accuracy</th>
+                    <th className="p-2 font-semibold text-red-800">AI dependency</th>
+                    <th className="p-2 font-semibold text-green-800">Understanding</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {classAvgWeekly.map((w) => (
+                    <tr key={`${w.weekStartDate}-${w.weekNumber}`} className="border-b border-gray-100">
+                      <td className="p-2 text-gray-800">{w.weekNumber}</td>
+                      <td className="p-2 text-gray-600 whitespace-nowrap">
+                        {fmtWeekRange(w.weekStartDate, w.weekEndDate) || '—'}
+                      </td>
+                      <td className="p-2">{fmtScore(w.accuracy)}</td>
+                      <td className="p-2">{fmtScore(w.aiDependency)}</td>
+                      <td className="p-2">{fmtScore(w.understanding)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   ) : null;
@@ -288,6 +472,13 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
               >
                 Learn more about metrics
               </button>
+              <button
+                type="button"
+                onClick={() => void openClassAveragesModal()}
+                className="px-3 py-2 rounded-lg border border-gray-900 bg-gray-900 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+              >
+                Class averages
+              </button>
             </div>
           </div>
           {students.length === 0 ? (
@@ -349,6 +540,7 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
           )}
         </div>
         {learnMoreModal}
+        {classAveragesModal}
       </>
     );
   }
