@@ -193,14 +193,16 @@ const App: React.FC = () => {
   // Sync app state with browser history so back/forward work in-app
   useEffect(() => {
     if (!session || view === 'LOGIN') return;
-    if (session.role === UserRole.ADMIN) return;
     if (isRestoringFromHistory.current) {
       isRestoringFromHistory.current = false;
       return;
     }
     const state = {
+      role: session.role,
       view,
       classId: selectedClass?.class_id ?? null,
+      // For admin we need the class label on restore.
+      selectedClass: session.role === UserRole.ADMIN ? selectedClass : null,
       assignmentId: selectedAssignment?.id ?? null,
     };
     const current = window.history.state as { view?: string } | null;
@@ -213,25 +215,44 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const onPopState = (e: PopStateEvent) => {
-      if (session?.role === UserRole.ADMIN) return;
-      const s = e.state as { view?: ViewState; classId?: number | null; assignmentId?: string | null } | null;
+      const s = e.state as
+        | {
+            role?: UserRole;
+            view?: ViewState;
+            classId?: number | null;
+            selectedClass?: ClassSummary | null;
+            assignmentId?: string | null;
+          }
+        | null;
       if (!s?.view) return;
+      if (session?.role && s.role && session.role !== s.role) return;
       isRestoringFromHistory.current = true;
       setView(s.view);
+      if (s.role === UserRole.ADMIN) {
+        if (s.view === 'ADMIN_CLASS_SELECT') {
+          setSelectedClass(null);
+        } else if (s.view === 'ADMIN_CLASS_DETAIL') {
+          setSelectedClass(s.selectedClass ?? null);
+        } else if (s.view === 'ADMIN_GLOBAL_METRICS') {
+          setSelectedClass(null);
+        }
+        setSelectedAssignment(null);
+        return;
+      }
+
       if (s.view === 'CLASS_SELECT') {
         setSelectedClass(null);
         setSelectedAssignment(null);
+        return;
+      }
+
+      if (s.assignmentId != null && s.assignmentId !== '' && s.view === 'ASSIGNMENT_VIEW') {
+        setSelectedAssignment((prev) => classAssignments.find((a) => a.id === String(s.assignmentId)) ?? prev ?? null);
       } else {
-        if (s.view === 'ASSIGNMENT_VIEW' && s.assignmentId != null && s.assignmentId !== '') {
-          setSelectedAssignment((prev) =>
-            classAssignments.find((a) => a.id === String(s!.assignmentId)) ?? prev ?? null
-          );
-        } else {
-          setSelectedAssignment(null);
-        }
-        if (s.view === 'ASSIGNMENT_LIST' && selectedClass) {
-          refetchClassAssignments();
-        }
+        setSelectedAssignment(null);
+      }
+      if (s.view === 'ASSIGNMENT_LIST' && selectedClass) {
+        refetchClassAssignments();
       }
     };
     window.addEventListener('popstate', onPopState);
