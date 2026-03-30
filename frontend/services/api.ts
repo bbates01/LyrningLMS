@@ -489,6 +489,44 @@ export async function fetchAdminAllClasses(token: string): Promise<AdminClassRow
   return data.classes ?? [];
 }
 
+export interface AdminCreateTeacherPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  username: string;
+  password: string;
+  /** YYYY-MM-DD */
+  dateOfBirth: string;
+}
+
+export interface AdminCreateTeacherResponse {
+  success: boolean;
+  teacherId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  username: string;
+  dateOfBirth: string;
+  error?: string;
+}
+
+export async function createAdminTeacher(
+  token: string,
+  payload: AdminCreateTeacherPayload
+): Promise<Omit<AdminCreateTeacherResponse, 'success' | 'error'>> {
+  const res = await fetch(`${API_BASE}/api/admin/teachers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json()) as AdminCreateTeacherResponse;
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || 'Failed to create teacher');
+  }
+  const { teacherId, firstName, lastName, email, username, dateOfBirth } = data;
+  return { teacherId, firstName, lastName, email, username, dateOfBirth };
+}
+
 export interface AdminFilterOptions {
   subjectCodes: string[];
   semesters: string[];

@@ -17,7 +17,8 @@ export type ViewState =
   | 'METRICS'
   | 'ADMIN_CLASS_SELECT'
   | 'ADMIN_CLASS_DETAIL'
-  | 'ADMIN_GLOBAL_METRICS';
+  | 'ADMIN_GLOBAL_METRICS'
+  | 'ADMIN_ADD_TEACHER';
 
 /** Class/course from API (teacher's taught classes) */
 export interface ClassSummary {

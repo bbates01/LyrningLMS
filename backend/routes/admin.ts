@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcrypt';
 import { query } from '../db/connection.js';
 import { requireAdminAuth } from '../auth/adminToken.js';
 
@@ -540,6 +541,74 @@ router.get('/classes/:classId/metrics/class-averages', async (req: express.Reque
   } catch (err) {
     console.error('admin class metric averages error:', err);
     return res.status(500).json({ success: false, error: 'Failed to fetch class metric averages' });
+  }
+});
+
+/**
+ * POST /api/admin/teachers
+ * Body: { firstName, lastName, email, username, password, dateOfBirth }
+ *
+ * Creates a new teacher login. Username and email must be unique.
+ */
+router.post('/teachers', async (req: express.Request, res: express.Response) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? String(body.password) : '';
+    const dateOfBirth = typeof body.dateOfBirth === 'string' ? body.dateOfBirth.trim() : '';
+
+    if (!firstName || !lastName || !email || !username || !password || !dateOfBirth) {
+      return res.status(400).json({ success: false, error: 'All fields are required' });
+    }
+
+    // Basic YYYY-MM-DD format check (Postgres DATE compatible).
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+      return res.status(400).json({ success: false, error: 'dateOfBirth must be YYYY-MM-DD' });
+    }
+
+    const exists = await query(
+      `SELECT 1 FROM teachers WHERE username = $1 OR email = $2 LIMIT 1`,
+      [username, email]
+    );
+    if (exists.rows.length > 0) {
+      return res.status(409).json({ success: false, error: 'Username or email already exists' });
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    const inserted = await query(
+      `INSERT INTO teachers (first_name, last_name, email, username, password_hash, date_of_birth)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING teacher_id, first_name, last_name, email, username, date_of_birth`,
+      [firstName, lastName, email, username, hash, dateOfBirth]
+    );
+    const row = inserted.rows[0] as {
+      teacher_id: number;
+      first_name: string;
+      last_name: string;
+      email: string;
+      username: string;
+      date_of_birth: string;
+    };
+    return res.json({
+      success: true,
+      teacherId: Number(row.teacher_id),
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+      username: row.username,
+      dateOfBirth: row.date_of_birth,
+    });
+  } catch (err: any) {
+    // Unique constraints (in case of race)
+    const code = String(err?.code ?? '');
+    if (code === '23505') {
+      return res.status(409).json({ success: false, error: 'Username or email already exists' });
+    }
+    console.error('admin create teacher error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to create teacher' });
   }
 });
 

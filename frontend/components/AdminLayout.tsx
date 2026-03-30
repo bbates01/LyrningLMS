@@ -39,6 +39,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   const isClassSelect = currentView === 'ADMIN_CLASS_SELECT';
   const isGlobal = currentView === 'ADMIN_GLOBAL_METRICS';
+  const isAddTeacher = currentView === 'ADMIN_ADD_TEACHER';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -56,7 +57,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
             <div className="h-6 w-px bg-slate-300" />
             <span className="text-slate-700 font-medium truncate text-sm sm:text-base">
               <span className="text-slate-500 font-normal">Admin</span>
-              {isGlobal
+              {isAddTeacher
+                ? ' · Add teacher'
+                : isGlobal
                 ? ' · Global metrics'
                 : selectedClass
                   ? ` · ${selectedClass.class_name}`
@@ -65,6 +68,15 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onViewChange('ADMIN_ADD_TEACHER')}
+              className={`px-3 py-2 rounded-lg text-sm font-medium border ${
+                isAddTeacher ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              Add teacher
+            </button>
             {(isClassSelect || isGlobal) && (
               <button
                 type="button"

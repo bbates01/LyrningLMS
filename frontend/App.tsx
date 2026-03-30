@@ -15,6 +15,7 @@ import AdminLayout from './components/AdminLayout';
 import AdminClassSelect from './components/AdminClassSelect';
 import AdminClassDetail from './components/AdminClassDetail';
 import AdminGlobalMetrics from './components/AdminGlobalMetrics';
+import AdminAddTeacher from './components/AdminAddTeacher';
 import Home from './components/Home';
 import Contact from './components/Contact';
 import { ViewState, UserSession, Assignment, ClassSummary, UserRole } from './types';
@@ -275,6 +276,8 @@ const App: React.FC = () => {
     setSession(newSession);
     setView('CLASS_SELECT');
     setSelectedClass(null);
+    // If the user logged in from /login, take them into the app.
+    window.history.replaceState({}, '', '/');
   };
 
   const handleAdminLogin = (newSession: UserSession) => {
@@ -451,6 +454,7 @@ const App: React.FC = () => {
           <AdminClassDetail classId={selectedClass.class_id} adminToken={session.adminToken} />
         )}
         {view === 'ADMIN_GLOBAL_METRICS' && <AdminGlobalMetrics adminToken={session.adminToken} />}
+        {view === 'ADMIN_ADD_TEACHER' && <AdminAddTeacher adminToken={session.adminToken} />}
       </AdminLayout>
     );
   }
@@ -459,7 +463,7 @@ const App: React.FC = () => {
     return <AdminLogin onLogin={handleAdminLogin} />;
   }
 
-  if (window.location.pathname === '/login') {
+  if (window.location.pathname === '/login' && (!session || view === 'LOGIN')) {
     return <Login onLogin={handleTeacherLogin} />;
   }
 
