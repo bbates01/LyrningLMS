@@ -1,120 +1,106 @@
 # LyrningLMS
 
-A learning management system that integrates AI as a guided learning tool while giving teachers visibility into student understanding, engagement, and AI dependency.
+LyrningLMS is a role-based LMS with AI-assisted assignment authoring, student assignment delivery/submission, and teacher/admin analytics.
 
-**Current vertical slice (Sprint 1):** Teachers can upload a PDF, AI generates assignment questions, teachers can edit and confirm them, and an assignment link is created for sharing with students. Students can open the assignment, answer questions, and submit — their grade is stored in the database along with AI-generated metrics (understanding, engagement, and AI-dependency scores). Adding a student to a class by class code is also fully supported.
+This README reflects the current implementation in the repository as of March 2026.
 
----
+## What Is Implemented
 
-## App Summary
+### Teacher flow
 
-**Problem:** Teenagers increasingly rely on AI to complete work without learning. Educators need a way to use AI in the classroom that supports understanding instead of shortcuts.
+- Teacher login and class selection
+- Create, edit, and delete classes
+- Add existing students to a class, create new students in a class, and remove students from a class
+- Create assignments with:
+  - due date (optional)
+  - max points
+  - allowed submission attempts
+  - attempt scoring policy (`latest`, `highest`, `average`)
+  - AI tutor instructions
+- Upload PDFs for assignment generation context (PDFs are processed, not permanently stored)
+- AI-generated questions from PDF/context with support for:
+  - multiple choice
+  - true/false
+  - short answer
+  - select-all-that-apply
+- Save and edit assignment questions/options
+- Teacher grades view per class with assignment averages and per-student results
+- Teacher metrics view per class and per student (weekly snapshots)
 
-**Product value:** LyrningLMS gives teachers a single place to create assignments, quizzes, labs, and projects and to embed the Groq API with configurable guardrails. Students get AI help that stays within teacher-set restrictions, while teachers see metrics on understanding, engagement, and AI dependency. That lets educators spot over-reliance early and adjust support. The result: students build independent problem-solving skills while using AI as a learning aid, not a crutch.
+### Student flow
 
----
+- Student-only login page via shared assignment link path
+- JWT-authenticated assignment access and submission
+- Multi-attempt assignment submissions with attempt tracking
+- Auto-grading for objective question types
+- AI-assisted grading fallback for short answer
+- AI tutor chat during assignment attempts
+- AI tutor refuses direct/near-verbatim assignment-question answering
+- Per-attempt and aggregate scoring, including:
+  - points
+  - percentage
+  - letter grade
+  - understanding score
+  - AI dependency score
+  - engagement score
+
+### Admin flow
+
+- Dedicated admin login (`/admin`)
+- Read-only cross-class analytics
+- Global metrics with multi-select cascading filters:
+  - subject
+  - semester
+  - period
+  - teacher
+- Read-only class detail views for grades and metrics
 
 ## Tech Stack
 
-Organized by layer:
+- Frontend: React + TypeScript + Vite
+- Backend: Node.js + Express + TypeScript
+- Database: Postgres (`pg`)
+- AI: Groq-compatible OpenAI API client
 
-| Layer | Technologies |
-|-------|--------------|
-| **Frontend** | React, TypeScript, Vite (build and dev server), component-based UI |
-| **Backend** | Node.js, Express.js (REST API) |
-| **Data** | Postgres (Neon in production) |
-| **External** | Groq API (AI learning assistance) |
+## Project Structure
 
-- **Frontend:** React with TypeScript; Vite for fast builds and HMR.
-- **Backend:** Node.js and Express for auth, classes, assignments, and enrollment.
-- **Database:** Postgres with tables for students, teachers, classes, subjects, assignments, grades, and metrics.
-- **APIs:** REST for the app; Groq for in-assignment AI tutoring.
+```text
+backend/
+  server.ts
+  routes/
+    auth.ts
+    classes.ts
+    ai.ts
+    student.ts
+    admin.ts
+  db/
+    schema.pg.sql
+    seed.pg.sql
+    init-db.ts
+    migrate.ts
+  auth/
+    studentToken.ts
+    adminToken.ts
 
----
+frontend/
+  App.tsx
+  components/
+  services/
 
-## Architecture
-
+dev.sh
+package.json
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         User Browser                             │
-│                    (Teacher / Student)                            │
-└────────────────────────┬────────────────────────────────────────┘
-                         │ HTTP
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    React Frontend (Vite)                         │
-│  Class list · Class home · Assignments · Grades · Metrics · Info │
-└────────────────────────┬────────────────────────────────────────┘
-                         │ REST (JSON)
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│               Express Backend (Node.js)                          │
-│  /api/auth  ·  /api/classes  (list, enroll by code, assignments)│
-└────┬───────────────────────────────────────────────────────┬────┘
-     │ SQL                                                    │ HTTPS
-     ▼                                                        ▼
-┌──────────────────┐                          ┌──────────────────────┐
-│   Postgres       │                          │  Groq API            │
-│   (Neon / local) │                          │  (AI tutor)          │
-└──────────────────┘                          └──────────────────────┘
-```
-
-- **Browser:** Teachers and students use the same app; role is determined at login.
-- **Frontend:** SPA that calls the backend for auth, class list, enrollment, and assignments.
-- **Backend:** Serves REST endpoints; talks to Postgres and (for AI) to Groq.
-- **Database:** Holds users, classes, enrollments, assignments, and grades. **Class codes** (see below) allow students to join classes without exposing primary keys.
-
----
-
-## Definition of Done
-
-A user story or task is considered **Done** when all of the following are true:
-
-- The feature is fully implemented and matches the acceptance criteria on the Trello card.
-- The code is committed and pushed to the shared GitHub repository on the correct branch.
-- The README (and ERD if schema changed) has been updated to reflect any new or changed functionality.
-- The feature works end-to-end in a local environment using the setup steps in this README.
-- No known critical bugs remain for the feature being closed.
-- The Trello card has been moved to **Done** or **Accepted by Product Owner**.
-
----
-
-## Why Class Codes Was Added
-
-This was not in the original ERD design but has been added for the following reason:
-
-The database uses a **`class_code`** (e.g. `R7T4W9YZ`) on each class in addition to the primary key. We need a stable, shareable way for students to join a class without exposing internal IDs. Teachers share the class code; students enter it in “Add class.” The app looks up the class by `class_code` and creates the enrollment. Primary keys stay internal and are not shown or required from the user. 
-
----
 
 ## Prerequisites
 
-- **Node.js 20.x (LTS)** — [nodejs.org](https://nodejs.org)  
-  - This project includes an `.nvmrc` file. If you use `nvm`, run `nvm use` in the project root to automatically switch to Node 20.  
-  - Verify with: `node --version` (should show something like `v20.x.x`).
-- **npm** (included with Node)  
-  `npm --version`
-- **Postgres database** — in production we use **Neon** via `DATABASE_URL`; locally you can use the same Neon DB or any Postgres instance.
-- **Groq API key** (optional; **not required** for testing the vertical slice) — [console.groq.com](https://console.groq.com)
+- Node.js 20.x (repo includes `.nvmrc`)
+- npm
+- Postgres database (local or hosted, e.g. Neon)
+- Groq API key for AI endpoints
 
----
+## Environment Variables
 
-## Local Setup
-
-Do these in order.
-
-### 1. Clone the Repository and install
-
-```bash
-git clone [URL]
-cd LyrningLMS
-nvm use   # if you have nvm installed; otherwise make sure you're on Node 20.x
-npm install
-```
-
-### 2. Environment
-
-Create a `.env` in the project root (or copy from `.env.example`):
+Create `.env` at project root:
 
 ```env
 DATABASE_URL=postgresql://neondb_owner:your_password_here@your_host_here/neondb?sslmode=require
@@ -122,166 +108,125 @@ PORT=3001
 NODE_ENV=development
 GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL=llama-3.3-70b-versatile
-# Optional: set to true once to drop & reseed Postgres
 RESET_DB=false
+
+# Optional (defaults exist in code for local dev)
+# JWT_SECRET=change-me
+# STUDENT_JWT_SECRET=change-me
+# STUDENT_JWT_EXPIRES_IN=8h
+# ADMIN_JWT_SECRET=change-me
+# ADMIN_JWT_EXPIRES_IN=12h
 ```
 
-- `DATABASE_URL` is the Postgres connection string (Neon in production).
-- `PORT` is the backend port. In production the frontend calls `/api/...` on the same origin.
-- `GROQ_API_KEY` is used by the backend for the AI tutor and assignment question generation. Get a key at [console.groq.com](https://console.groq.com). Not required for testing the vertical slice (e.g. add a student to a class by class code).
+## Setup
 
-### 3. Database
+1. Install dependencies
 
-Initialize the Postgres database (creates tables and seed data):
+```bash
+npm install
+```
+
+2. Initialize database schema + seed
 
 ```bash
 npm run db:init
 ```
 
-### 4. Run the app
+3. Run app (frontend + backend)
 
 ```bash
 npm run dev
 ```
 
-Then open the URL printed in the terminal (e.g. **http://localhost:5173** or **http://localhost:3000**). The backend runs on the port in `.env` (default **3001**).
+Default local URLs:
 
----
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:3001`
 
-## Test Accounts
+## Available Scripts
 
-Passwords are hashed in the database; for testing you can log in as any account using **`password123`**.  
-On the login screen, choose **Student** or **Teacher** and use one of the usernames below.
+- `npm run dev` - starts frontend and backend via `dev.sh`
+- `npm run dev:both` - starts both processes with `concurrently`
+- `npm run dev:backend` - backend only (`tsx watch backend/server.ts`)
+- `npm run dev:frontend` - frontend only (`vite` in `frontend/`)
+- `npm run db:init` - initialize/reset database schema + seed
+- `npm run build` - build frontend
+- `npm run preview` - preview frontend build
+- `npm start` - runs `db:init`, then starts backend
 
-| Role    | Username  |
-|---------|-----------|
-| Teacher | `sarah_b`, `james_ob`, `priya_s` |
-| Student | `alice_j`, `bob_m`, `chloe_p`, `david_n`, `emma_w`, `felix_c`, `grace_t`, `henry_d` |
+## Authentication and Accounts
 
----
+### Teacher login
 
-## Verification: Enroll a Student via Class Code
+- Login page: `/`
+- Seeded teacher usernames:
+  - `sarah_b`
+  - `james_ob`
+  - `priya_s`
 
-Use two accounts that are **not** in the same class yet: **Teacher `priya_s`** (Biology Honors) and **Student `emma_w`** (currently only in English Lit and Intro to CS).
+### Student login
 
-### Step 1 — Teacher: Get the class code
+- Student login page: `/student/login?class=<classId>&assignment=<assignmentId>`
+- Student assignment page: `/student/assignment/<classId>/<assignmentId>`
+- Seeded student usernames:
+  - `alice_j`, `bob_m`, `chloe_p`, `david_n`, `emma_w`, `felix_c`, `grace_t`, `henry_d`
 
-1. Log in as **Teacher** with username **`priya_s`**, password **`password123`**.
-2. On “Classes I Teach,” click **Biology Honors - Period 1**.
-3. Under the main nav, open the **Info** subtab.
-4. In **Class code**, note the value (e.g. **`R7T4W9YZ`**). You can copy or type it when acting as the student.
-5. (Optional) Log out, or use a different browser/incognito for the student.
+Important password behavior:
 
-### Step 2 — Student: Add the class
+- Student seed hashes start from a shared default hash, but migrations convert students to random generated passwords and store teacher-viewable plaintext passwords.
+- Teachers can view/update student passwords in the class info credential tools.
 
-1. Log in as **Student** with username **`emma_w`**, password **`password123`**.
-2. On “My Classes,” click **Add class**.
-3. Enter the class code from Step 1 (e.g. **`R7T4W9YZ`**). Case doesn’t matter.
-4. Click **Add class**.
+### Admin login
 
-**Success:** The modal closes, the list refreshes, and **Biology Honors - Period 1** appears in Emma’s classes. Clicking it shows the class home and assignments.
+- Admin login page: `/admin`
+- Default admin credentials:
+  - Username: `admin`
+  - Password: `adminMetrics!`
 
-**If it fails:** “Invalid class code” means the code is wrong or the DB doesn’t have that class. “Already enrolled” means that student is already in that class.
+## API Surface (High-Level)
 
----
+Base route groups:
 
-## Verification: Core Flows
+- `/api/auth` - teacher/student/admin login and student password management
+- `/api/classes` - class CRUD, enrollment, assignment CRUD, grades, class metrics
+- `/api/ai` - tutor chat, PDF text extraction, question generation, batch question updates
+- `/api/student` - JWT-protected student assignment payload + submission
+- `/api/admin` - JWT-protected read-only admin analytics endpoints
 
-- **Login:** Choose Student or Teacher, enter a username and `password123`. You should land on the class list (students: “My Classes”; teachers: “Classes I Teach”).
-- **Class home:** Click a class. You should see that class’s name in the header and a roadmap/assignments list. Teachers also see **Home** and **Info** subtabs.
-- **Teacher Info:** In a class, open the **Info** subtab. You should see class name, subject, description, **class code**, period, semester, and room.
-- **Database:** With the app running, you can confirm enrollment in Postgres using any SQL client connected via `DATABASE_URL`. After the enrollment steps above, Emma should have an extra row for the Biology class in `student_classes`.
+Health check:
 
----
+- `GET /health`
 
-## Project Layout (high level)
+## Data and Grading Notes
 
-- **`frontend/`** — React app (components, services, types).
-- **`backend/`** — Express server and routes (`auth`, `classes`), DB connection and queries.
-- **`backend/db/`** — Postgres connection and schema/seed files (see `connection.ts`, `schema.pg.sql`, `seed.pg.sql`, `init-db.ts`).
+- Assignments support multiple attempts with configurable keep policy (`latest`, `highest`, `average`).
+- Per-attempt results are stored in `student_assignment_attempt_grades`.
+- Aggregate grade values are persisted in `student_grades`.
+- Weekly metrics snapshots are stored in `student_metrics`.
+- PDFs are currently processed for AI context but not stored permanently.
 
-A new teammate can run the project by: installing Node, copying `.env`, running `npm run db:init`, and running `npm run dev`, then following the verification steps above.
+## Known Limitations
 
-# EARS Requirements
+- Assignment PDF download endpoint intentionally returns 404 (`/api/classes/assignments/:assignmentId/pdf`).
+- Some analytics values (for example engagement) currently use simplified scoring behavior and can be refined.
 
-## Complete
+## Troubleshooting
 
-1. When a teacher uploads course material (PDF), the system shall store the material for assignment generation.
+### Database connection errors
 
-2. When course material is uploaded, the system shall generate assignment questions using AI.
+- Confirm `DATABASE_URL` in `.env`
+- Re-run:
 
-3. When AI generates assignment questions, the system shall allow teachers to edit the questions before confirming them.
+```bash
+npm run db:init
+```
 
-4. When a teacher confirms generated questions, the system shall store the questions and answers in the database.
+### AI endpoints failing
 
-5. When a teacher logs into the system, the system shall allow navigation to the assignment creation page.
+- Confirm `GROQ_API_KEY` is set
+- Confirm backend is running on the expected port
 
-6. The system shall allow teachers to upload assignment materials (e.g., class PDFs).
+### Port conflicts
 
-7. The system shall support AI parameter configuration using a default parameter file.
-
-8. When an assignment is created, the system shall store AI parameters associated with that assignment in the database.
-
-9. When an assignment is created, the system shall generate a shareable assignment link for teachers. *(Sprint 1 — Will)*
-
-10. When a teacher requests an assignment link, the system shall allow the teacher to copy the link to share with students. *(Sprint 1 — Will)*
-
-11. When a student completes an assignment, the system shall synchronize the completed assignment data with the teacher’s system. *(Sprint 1 — Jake)*
-
-12. When a student completes an assignment, the system shall generate performance metrics based on the student’s responses. *(Sprint 1 — Jake)*
-
-13. When a student submits an assignment, the system shall assign a default grade based on the accuracy of the student’s answers. *(Sprint 1 — Jake)*
-
-14. The system documentation shall include an updated ERD reflecting AI assignment parameters and related schema changes. *(Sprint 1 — Marielle)*
-
-15. All developers shall clone the GitHub repository and configure their environment according to the README instructions. *(Sprint 1 — Everyone)*
-
-16. When a user attempts to log in, the system shall restrict the teacher login page to teacher credentials only.
-
-17. When a student attempts to access assignments, the system shall provide a student-specific access page through assignment links.
-
-18. When a student logs in, the system shall authenticate the student credentials before allowing access to the assignment completion page.
-
-19. When generating assignments, the system shall combine the default AI parameters and the custom teacher instructions defined in the assignment configuration.
-
-20. When a student interacts with the assignment system, the system shall provide an AI chat interface for assistance.
-
----
-
-## Not Complete
-
-1. The system shall calculate an AI dependency metric based on conversations students have with the AI tutor that can be viewed by teachers.
-
-2. When a student opens an assignment completion page, the system shall synchronize assignment questions and answers from the database.
-
-3. The system shall calculate an understanding metric based student's average scores on assignments.
-
----
-
-## Admin (Global Metrics) Login
-
-For a **read-only, CEO-style view** across all classes and teachers, there is a dedicated **Administrator** account:
-
-- **Username**: `admin`
-- **Password**: `adminMetrics!`
-
-To use it locally:
-
-1. Make sure the backend has run at least once so migrations can create/seed the `admins` table (this happens automatically on `npm run dev`, `npm run dev:backend`, or `npm start`).
-2. Start the app with `npm run dev`.
-3. In your browser, open the **Administrator login**:
-   - Either go directly to `http://127.0.0.1:5173/admin`, **or**
-   - On the main teacher login page, click **“Administrator login”** at the bottom.
-4. Sign in with the credentials above.
-
-What this admin can see/do:
-
-- View **all classes** for all teachers, with teacher names on each class card.
-- Click into any class to see:
-  - **Read-only metrics** for every student in that class (understanding, AI dependency, etc.).
-  - **Read-only grades** and class averages.
-- Open the **Global Metrics** view (button on the admin landing page) to see:
-  - Overall average student metrics across the database as charts.
-  - **Multi-select filters** for subject, semester, period, and teacher, where each filter list automatically narrows based on the others.
-
-The admin account **cannot** add/edit/delete classes, students, or assignments; it is strictly for analytics/visibility.
+- Change backend `PORT` in `.env`
+- If needed, adjust frontend API override (`VITE_API_URL`) in your environment
