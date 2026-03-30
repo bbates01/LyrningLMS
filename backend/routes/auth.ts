@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { query } from '../db/connection.js';
 import { LoginRequest, LoginResponse, Student, Teacher } from '../types.js';
 import { issueStudentToken } from '../auth/studentToken.js';
+import { issueAdminToken } from '../auth/adminToken.js';
 
 const router = express.Router();
 
@@ -92,6 +93,44 @@ router.post('/login', async (req: express.Request, res: express.Response) => {
       success: false,
       error: 'Server error during authentication',
     } as LoginResponse);
+  }
+});
+
+/** POST /api/auth/admin/login — platform admin (read-only analytics across all classes) */
+router.post('/admin/login', async (req: express.Request, res: express.Response) => {
+  try {
+    const username = typeof (req.body as { username?: unknown })?.username === 'string'
+      ? String((req.body as { username: string }).username).trim()
+      : '';
+    const password = typeof (req.body as { password?: unknown })?.password === 'string'
+      ? String((req.body as { password: string }).password)
+      : '';
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: 'Username and password are required' });
+    }
+
+    const result = await query('SELECT admin_id, password_hash FROM admins WHERE username = $1', [username]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ success: false, error: 'Invalid username or password' });
+    }
+
+    const row = result.rows[0] as { admin_id: number; password_hash: string };
+    const ok = await bcrypt.compare(password, row.password_hash);
+    if (!ok) {
+      return res.status(401).json({ success: false, error: 'Invalid username or password' });
+    }
+
+    const token = issueAdminToken(Number(row.admin_id));
+    return res.json({
+      success: true,
+      role: 'admin',
+      userId: Number(row.admin_id),
+      userName: username,
+      token,
+    });
+  } catch (error) {
+    console.error('Admin login error:', error);
+    return res.status(500).json({ success: false, error: 'Server error during authentication' });
   }
 });
 

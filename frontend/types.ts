@@ -1,6 +1,7 @@
 
 export enum UserRole {
   TEACHER = 'TEACHER',
+  ADMIN = 'ADMIN',
 }
 
 export type ViewState =
@@ -13,7 +14,10 @@ export type ViewState =
   | 'VIEW_AS_STUDENT'
   | 'ASSIGNMENT_CREATE_SUCCESS'
   | 'GRADES'
-  | 'METRICS';
+  | 'METRICS'
+  | 'ADMIN_CLASS_SELECT'
+  | 'ADMIN_CLASS_DETAIL'
+  | 'ADMIN_GLOBAL_METRICS';
 
 /** Class/course from API (teacher's taught classes) */
 export interface ClassSummary {
@@ -47,6 +51,8 @@ export interface UserSession {
   firstName?: string;
   lastName?: string;
   email?: string;
+  /** Bearer token for /api/admin/* (role ADMIN only) */
+  adminToken?: string;
 }
 
 export interface Assignment {

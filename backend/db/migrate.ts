@@ -18,7 +18,42 @@ function generatePassword(length = 10): string {
 // This is the bcrypt hash used by the current seed.sql/seed.pg.sql.
 const SEEDED_DEFAULT_PASSWORD_HASH = '$2b$12$8zdkLMBe8.oFbsRIl9ycp.uPg5u1NYIBCzdgtoqzgovrPis4vajai';
 
+/** Runs first so admin login works even if a later migration step fails. */
+async function ensureAdminsTableAndSeed(): Promise<void> {
+  try {
+    const hasAdmins = await query(
+      `SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'admins' LIMIT 1`
+    );
+    if (hasAdmins.rows.length === 0) {
+      await query(`
+        CREATE TABLE admins (
+          admin_id BIGSERIAL PRIMARY KEY,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`);
+      console.log('Migration: created admins table');
+    }
+    const adminSeedCheck = await query(
+      `SELECT COUNT(*)::int AS c FROM admins WHERE username = 'admin'`
+    );
+    const adminCount = Number((adminSeedCheck.rows[0] as { c: number })?.c ?? 0);
+    if (adminCount === 0) {
+      const hash = await bcrypt.hash('adminMetrics!', 12);
+      await query('INSERT INTO admins (username, password_hash) VALUES ($1, $2) ON CONFLICT (username) DO NOTHING', [
+        'admin',
+        hash,
+      ]);
+      console.log('Migration: seeded default admin user (username: admin)');
+    }
+  } catch (err) {
+    console.error('Migration: admins table/seed failed:', err);
+  }
+}
+
 export async function runMigrations(): Promise<void> {
+  await ensureAdminsTableAndSeed();
   try {
     const hasAiParams = await query(
       `SELECT 1 FROM information_schema.columns

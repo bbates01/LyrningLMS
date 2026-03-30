@@ -10,7 +10,12 @@ import StudentAssignmentPage from './components/StudentAssignmentPage';
 import TeacherStudentPreview from './components/TeacherStudentPreview';
 import TeacherGrades from './components/TeacherGrades';
 import TeacherMetrics from './components/TeacherMetrics';
-import { ViewState, UserSession, Assignment, ClassSummary } from './types';
+import AdminLogin from './components/AdminLogin';
+import AdminLayout from './components/AdminLayout';
+import AdminClassSelect from './components/AdminClassSelect';
+import AdminClassDetail from './components/AdminClassDetail';
+import AdminGlobalMetrics from './components/AdminGlobalMetrics';
+import { ViewState, UserSession, Assignment, ClassSummary, UserRole } from './types';
 import { BookOpen, Trash2 } from './components/Icons';
 import { fetchClassAssignments, fetchAssignmentQuestions, deleteAssignment, updateAssignment, type AssignmentQuestionPreview } from './services/api';
 
@@ -21,11 +26,28 @@ function loadStoredSession(): UserSession | null {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as Record<string, unknown>;
-    if (data && typeof data.role === 'string' && data.userId != null) return data as unknown as UserSession;
+    if (!data || typeof data.role !== 'string') return null;
+    if (data.role === 'ADMIN') {
+      if (typeof data.adminToken !== 'string' || data.userId == null) return null;
+      return {
+        role: UserRole.ADMIN,
+        userId: Number(data.userId),
+        userName: typeof data.userName === 'string' ? data.userName : undefined,
+        adminToken: data.adminToken,
+      };
+    }
+    if (data.userId != null) return data as unknown as UserSession;
   } catch {
     // ignore
   }
   return null;
+}
+
+function getInitialView(): ViewState {
+  const s = loadStoredSession();
+  if (s?.role === UserRole.ADMIN) return 'ADMIN_CLASS_SELECT';
+  if (s) return 'CLASS_SELECT';
+  return 'LOGIN';
 }
 
 const ASSIGNMENT_CATEGORIES: { label: string; types: string[]; createTypeDb: string }[] = [
@@ -130,7 +152,7 @@ function CopyStudentLinkButton({ classId, assignmentId }: { classId: number; ass
 
 const App: React.FC = () => {
   const [session, setSession] = useState<UserSession | null>(() => loadStoredSession());
-  const [view, setView] = useState<ViewState>(() => (loadStoredSession() ? 'CLASS_SELECT' : 'LOGIN'));
+  const [view, setView] = useState<ViewState>(getInitialView);
   const [selectedClass, setSelectedClass] = useState<ClassSummary | null>(null);
   const [classAssignments, setClassAssignments] = useState<Assignment[]>([]);
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
@@ -169,6 +191,7 @@ const App: React.FC = () => {
   // Sync app state with browser history so back/forward work in-app
   useEffect(() => {
     if (!session || view === 'LOGIN') return;
+    if (session.role === UserRole.ADMIN) return;
     if (isRestoringFromHistory.current) {
       isRestoringFromHistory.current = false;
       return;
@@ -188,6 +211,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const onPopState = (e: PopStateEvent) => {
+      if (session?.role === UserRole.ADMIN) return;
       const s = e.state as { view?: ViewState; classId?: number | null; assignmentId?: string | null } | null;
       if (!s?.view) return;
       isRestoringFromHistory.current = true;
@@ -210,7 +234,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [classAssignments, selectedClass, refetchClassAssignments]);
+  }, [classAssignments, selectedClass, refetchClassAssignments, session?.role]);
 
   useEffect(() => {
     if ((view !== 'ASSIGNMENT_VIEW' && view !== 'VIEW_AS_STUDENT') || !selectedAssignment || !selectedClass) {
@@ -224,10 +248,26 @@ const App: React.FC = () => {
     return () => { cancelled = true; };
   }, [view, selectedAssignment?.id, selectedClass?.class_id]);
 
-  const handleLogin = (newSession: UserSession) => {
+  const handleTeacherLogin = (newSession: UserSession) => {
     setSession(newSession);
     setView('CLASS_SELECT');
     setSelectedClass(null);
+  };
+
+  const handleAdminLogin = (newSession: UserSession) => {
+    setSession(newSession);
+    setView('ADMIN_CLASS_SELECT');
+    setSelectedClass(null);
+  };
+
+  const handleAdminSelectClass = (cls: ClassSummary) => {
+    setSelectedClass(cls);
+    setView('ADMIN_CLASS_DETAIL');
+  };
+
+  const handleAdminBackToClasses = () => {
+    setSelectedClass(null);
+    setView('ADMIN_CLASS_SELECT');
   };
 
   const handleLogout = () => {
@@ -240,6 +280,9 @@ const App: React.FC = () => {
     setView('LOGIN');
     setSelectedClass(null);
     setSelectedAssignment(null);
+    if (window.location.pathname === '/admin') {
+      window.history.replaceState({}, '', '/');
+    }
   };
 
   const handleSelectClass = (cls: ClassSummary) => {
@@ -363,8 +406,36 @@ const App: React.FC = () => {
     }
   }
 
+  if (session?.role === UserRole.ADMIN && session.adminToken) {
+    return (
+      <AdminLayout
+        currentView={view}
+        onViewChange={setView}
+        onLogout={handleLogout}
+        selectedClass={selectedClass}
+        onBackToClasses={handleAdminBackToClasses}
+        onOpenGlobalMetrics={() => {
+          setSelectedClass(null);
+          setView('ADMIN_GLOBAL_METRICS');
+        }}
+      >
+        {view === 'ADMIN_CLASS_SELECT' && (
+          <AdminClassSelect adminToken={session.adminToken} onSelectClass={handleAdminSelectClass} />
+        )}
+        {view === 'ADMIN_CLASS_DETAIL' && selectedClass && (
+          <AdminClassDetail classId={selectedClass.class_id} adminToken={session.adminToken} />
+        )}
+        {view === 'ADMIN_GLOBAL_METRICS' && <AdminGlobalMetrics adminToken={session.adminToken} />}
+      </AdminLayout>
+    );
+  }
+
+  if (window.location.pathname === '/admin') {
+    return <AdminLogin onLogin={handleAdminLogin} />;
+  }
+
   if (!session || view === 'LOGIN') {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleTeacherLogin} />;
   }
 
   const renderContent = () => {

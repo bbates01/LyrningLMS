@@ -6,9 +6,12 @@ import AssignmentQuestionsEditorModal from './AssignmentQuestionsEditorModal';
 interface TeacherGradesProps {
   classId: number;
   teacherId: number;
+  /** When set, grades load via admin API and editing is disabled */
+  adminToken?: string;
 }
 
-const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => {
+const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId, adminToken }) => {
+  const readOnly = Boolean(adminToken);
   const ASSIGNMENTS_PER_PAGE = 6;
   const [assignments, setAssignments] = useState<AssignmentGradeSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +45,7 @@ const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => 
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchClassGrades(classId)
+    fetchClassGrades(classId, adminToken ? { adminToken } : undefined)
       .then((data) => {
         if (!cancelled) setAssignments(data);
       })
@@ -53,7 +56,7 @@ const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => 
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [classId]);
+  }, [classId, adminToken]);
 
   const assignmentTypes = useMemo(() => {
     const set = new Set<string>();
@@ -343,13 +346,15 @@ const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => 
                           <span className="inline-flex items-center px-2 py-1 rounded-full bg-red-50 text-red-700 font-medium">
                             Avg AI Dependency: {fmtPercent(a.averages?.aiDependency)}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => openEditAssignmentModal(a)}
-                            className="ml-auto inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200"
-                          >
-                            Edit assignment
-                          </button>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              onClick={() => openEditAssignmentModal(a)}
+                              className="ml-auto inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-medium hover:bg-gray-200"
+                            >
+                              Edit assignment
+                            </button>
+                          )}
                         </div>
                       </>
                     )}
@@ -446,7 +451,7 @@ const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => 
         </div>
       )}
 
-      {editingAssignment && (
+      {editingAssignment && !readOnly && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !editSaving && setEditingAssignment(null)}>
           <div className="w-full max-w-lg bg-white rounded-2xl border border-gray-200 shadow-xl p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-black">Edit assignment</h3>
@@ -504,7 +509,7 @@ const TeacherGrades: React.FC<TeacherGradesProps> = ({ classId, teacherId }) => 
           </div>
         </div>
       )}
-      {editingAssignment && editQuestionsModalOpen && (
+      {editingAssignment && editQuestionsModalOpen && !readOnly && (
         <AssignmentQuestionsEditorModal
           classId={classId}
           assignmentId={editingAssignment.assignmentId}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { API_BASE } from '../services/api';
 
 type StudentRow = {
   student_id: number;
@@ -12,10 +13,6 @@ interface AddStudentToClassCardProps {
   classId: number;
   onStudentAdded?: () => void;
 }
-
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 const AddStudentToClassCard: React.FC<AddStudentToClassCardProps> = ({ classId, onStudentAdded }) => {
   const [mode, setMode] = useState<'existing' | 'new'>('existing');

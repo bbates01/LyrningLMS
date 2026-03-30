@@ -22,6 +22,13 @@ CREATE TABLE teachers (
     date_of_birth DATE NOT NULL
 );
 
+CREATE TABLE admins (
+    admin_id      BIGSERIAL PRIMARY KEY,
+    username      TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE subjects (
     subject_id   BIGSERIAL PRIMARY KEY,
     subject_code TEXT  NOT NULL UNIQUE,

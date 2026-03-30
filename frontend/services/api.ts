@@ -1,6 +1,8 @@
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
+const envUrl = import.meta.env.VITE_API_URL;
+/** In dev with no override, use same-origin `/api` (Vite proxies to the backend). */
+export const API_BASE =
+  (typeof envUrl === 'string' && envUrl.length > 0 ? envUrl : '') ||
+  (import.meta.env.DEV ? '' : '');
 
 export interface StudentLoginResponse {
   success: boolean;
@@ -314,8 +316,18 @@ export interface AssignmentGradeSummary {
   students: AssignmentStudentGrade[];
 }
 
-export async function fetchClassGrades(classId: number): Promise<AssignmentGradeSummary[]> {
-  const res = await fetch(`${API_BASE}/api/classes/${classId}/grades`);
+export type AdminFetchOptions = { adminToken?: string };
+
+export async function fetchClassGrades(
+  classId: number,
+  options?: AdminFetchOptions
+): Promise<AssignmentGradeSummary[]> {
+  const path = options?.adminToken
+    ? `${API_BASE}/api/admin/classes/${classId}/grades`
+    : `${API_BASE}/api/classes/${classId}/grades`;
+  const headers: HeadersInit = {};
+  if (options?.adminToken) headers.Authorization = `Bearer ${options.adminToken}`;
+  const res = await fetch(path, { headers });
   if (!res.ok) throw new Error('Failed to fetch grades');
   const data = await res.json();
   return data.assignments ?? [];
@@ -352,8 +364,16 @@ export interface StudentMetricHistoryPayload {
   history: StudentMetricHistoryPoint[];
 }
 
-export async function fetchClassMetricStudents(classId: number): Promise<ClassMetricStudentSummary[]> {
-  const res = await fetch(`${API_BASE}/api/classes/${classId}/metrics/students`);
+export async function fetchClassMetricStudents(
+  classId: number,
+  options?: AdminFetchOptions
+): Promise<ClassMetricStudentSummary[]> {
+  const path = options?.adminToken
+    ? `${API_BASE}/api/admin/classes/${classId}/metrics/students`
+    : `${API_BASE}/api/classes/${classId}/metrics/students`;
+  const headers: HeadersInit = {};
+  if (options?.adminToken) headers.Authorization = `Bearer ${options.adminToken}`;
+  const res = await fetch(path, { headers });
   const data = await res.json();
   if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch metrics');
   return data.students ?? [];
@@ -361,9 +381,15 @@ export async function fetchClassMetricStudents(classId: number): Promise<ClassMe
 
 export async function fetchStudentMetricHistory(
   classId: number,
-  studentId: number
+  studentId: number,
+  options?: AdminFetchOptions
 ): Promise<StudentMetricHistoryPayload> {
-  const res = await fetch(`${API_BASE}/api/classes/${classId}/metrics/students/${studentId}`);
+  const path = options?.adminToken
+    ? `${API_BASE}/api/admin/classes/${classId}/metrics/students/${studentId}`
+    : `${API_BASE}/api/classes/${classId}/metrics/students/${studentId}`;
+  const headers: HeadersInit = {};
+  if (options?.adminToken) headers.Authorization = `Bearer ${options.adminToken}`;
+  const res = await fetch(path, { headers });
   const data = await res.json();
   if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch student metrics');
   return { student: data.student, history: data.history ?? [] };
@@ -392,10 +418,137 @@ export interface ClassMetricAveragesPayload {
   } | null;
 }
 
-export async function fetchClassMetricAverages(classId: number): Promise<ClassMetricAveragesPayload> {
-  const res = await fetch(`${API_BASE}/api/classes/${classId}/metrics/class-averages`);
+export async function fetchClassMetricAverages(
+  classId: number,
+  options?: AdminFetchOptions
+): Promise<ClassMetricAveragesPayload> {
+  const path = options?.adminToken
+    ? `${API_BASE}/api/admin/classes/${classId}/metrics/class-averages`
+    : `${API_BASE}/api/classes/${classId}/metrics/class-averages`;
+  const headers: HeadersInit = {};
+  if (options?.adminToken) headers.Authorization = `Bearer ${options.adminToken}`;
+  const res = await fetch(path, { headers });
   const data = await res.json();
   if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch class metric averages');
+  return {
+    weekly: data.weekly ?? [],
+    currentAverages: data.currentAverages ?? null,
+    currentWeek: data.currentWeek ?? null,
+  };
+}
+
+export interface AdminLoginResponse {
+  success: boolean;
+  role: 'admin';
+  userId: number;
+  userName: string;
+  token: string;
+  error?: string;
+}
+
+export async function adminLogin(username: string, password: string): Promise<AdminLoginResponse> {
+  const res = await fetch(`${API_BASE}/api/auth/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  let data: AdminLoginResponse;
+  try {
+    data = (await res.json()) as AdminLoginResponse;
+  } catch {
+    throw new Error(
+      `Could not reach the API (HTTP ${res.status}). Is the backend running on port 3001?`
+    );
+  }
+  if (!res.ok || !data?.success) {
+    throw new Error(data?.error || 'Admin login failed.');
+  }
+  return data;
+}
+
+export interface AdminClassRow {
+  class_id: number;
+  class_code: string;
+  class_name: string;
+  period: string | null;
+  semester: string | null;
+  room_number: string | null;
+  subject_code: string;
+  subject_description: string | null;
+  teacher_id: number;
+  teacher_first_name: string;
+  teacher_last_name: string;
+}
+
+export async function fetchAdminAllClasses(token: string): Promise<AdminClassRow[]> {
+  const res = await fetch(`${API_BASE}/api/admin/classes`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch classes');
+  return data.classes ?? [];
+}
+
+export interface AdminFilterOptions {
+  subjectCodes: string[];
+  semesters: string[];
+  periods: string[];
+  teachers: { teacherId: number; firstName: string; lastName: string }[];
+}
+
+export interface AdminGlobalMetricsFilters {
+  subjectCodes: string[];
+  semesters: string[];
+  periods: string[];
+  teacherIds: number[];
+}
+
+function appendMulti(params: URLSearchParams, key: string, values: readonly (string | number)[]): void {
+  for (const v of values) params.append(key, String(v));
+}
+
+export async function fetchAdminFilterOptions(
+  token: string,
+  filters?: AdminGlobalMetricsFilters
+): Promise<AdminFilterOptions> {
+  const params = new URLSearchParams();
+  if (filters) {
+    appendMulti(params, 'subjectCodes', filters.subjectCodes);
+    appendMulti(params, 'semesters', filters.semesters);
+    appendMulti(params, 'periods', filters.periods);
+    appendMulti(params, 'teacherIds', filters.teacherIds);
+  }
+  const q = params.toString();
+  const res = await fetch(`${API_BASE}/api/admin/filter-options${q ? `?${q}` : ''}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch filter options');
+  return {
+    subjectCodes: data.subjectCodes ?? [],
+    semesters: data.semesters ?? [],
+    periods: data.periods ?? [],
+    teachers: data.teachers ?? [],
+  };
+}
+
+export async function fetchAdminGlobalMetrics(
+  token: string,
+  filters?: AdminGlobalMetricsFilters
+): Promise<ClassMetricAveragesPayload> {
+  const params = new URLSearchParams();
+  if (filters) {
+    appendMulti(params, 'subjectCodes', filters.subjectCodes);
+    appendMulti(params, 'semesters', filters.semesters);
+    appendMulti(params, 'periods', filters.periods);
+    appendMulti(params, 'teacherIds', filters.teacherIds);
+  }
+  const q = params.toString();
+  const res = await fetch(`${API_BASE}/api/admin/metrics/global${q ? `?${q}` : ''}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to fetch global metrics');
   return {
     weekly: data.weekly ?? [],
     currentAverages: data.currentAverages ?? null,

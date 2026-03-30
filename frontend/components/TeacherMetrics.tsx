@@ -20,6 +20,8 @@ import {
 
 interface TeacherMetricsProps {
   classId: number;
+  /** When set, metrics are loaded via authenticated admin API */
+  adminToken?: string;
 }
 
 type MetricKey = 'accuracy' | 'aiDependency' | 'understanding';
@@ -55,7 +57,7 @@ function fmtWeekRange(start: string, end: string): string {
   }
 }
 
-const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
+const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId, adminToken }) => {
   const STUDENTS_PER_PAGE = 8;
   const [level, setLevel] = useState<MetricsLevel>('student_list');
   const [students, setStudents] = useState<ClassMetricStudentSummary[]>([]);
@@ -78,11 +80,16 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
   const [classAvgWeekMeta, setClassAvgWeekMeta] = useState<ClassMetricAveragesPayload['currentWeek']>(null);
   const [classAvgSelectedMetric, setClassAvgSelectedMetric] = useState<MetricKey>('accuracy');
 
+  const metricFetchOpts = useMemo(
+    () => (adminToken ? { adminToken } : undefined),
+    [adminToken]
+  );
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchClassMetricStudents(classId)
+    fetchClassMetricStudents(classId, metricFetchOpts)
       .then((data) => {
         if (!cancelled) setStudents(data);
       })
@@ -95,7 +102,7 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
     return () => {
       cancelled = true;
     };
-  }, [classId]);
+  }, [classId, metricFetchOpts]);
 
   const selectedStudentName = useMemo(() => {
     if (!selectedStudent) return '';
@@ -159,7 +166,7 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchStudentMetricHistory(classId, student.studentId);
+      const data = await fetchStudentMetricHistory(classId, student.studentId, metricFetchOpts);
       setHistory(data.history);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load student metrics.');
@@ -213,7 +220,7 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
     setClassAvgLoading(true);
     setClassAvgError(null);
     try {
-      const data = await fetchClassMetricAverages(classId);
+      const data = await fetchClassMetricAverages(classId, metricFetchOpts);
       setClassAvgWeekly(data.weekly);
       setClassAvgCurrent(data.currentAverages);
       setClassAvgWeekMeta(data.currentWeek);
@@ -225,7 +232,7 @@ const TeacherMetrics: React.FC<TeacherMetricsProps> = ({ classId }) => {
     } finally {
       setClassAvgLoading(false);
     }
-  }, [classId]);
+  }, [classId, metricFetchOpts]);
 
   const learnMoreModal = showLearnMore ? (
     <div

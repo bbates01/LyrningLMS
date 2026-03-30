@@ -256,13 +256,32 @@ A new teammate can run the project by: installing Node, copying `.env`, running 
 
 3. The system shall calculate an understanding metric based student's average scores on assignments.
 
+---
 
+## Admin (Global Metrics) Login
 
+For a **read-only, CEO-style view** across all classes and teachers, there is a dedicated **Administrator** account:
 
+- **Username**: `admin`
+- **Password**: `adminMetrics!`
 
+To use it locally:
 
+1. Make sure the backend has run at least once so migrations can create/seed the `admins` table (this happens automatically on `npm run dev`, `npm run dev:backend`, or `npm start`).
+2. Start the app with `npm run dev`.
+3. In your browser, open the **Administrator login**:
+   - Either go directly to `http://127.0.0.1:5173/admin`, **or**
+   - On the main teacher login page, click **“Administrator login”** at the bottom.
+4. Sign in with the credentials above.
 
+What this admin can see/do:
 
+- View **all classes** for all teachers, with teacher names on each class card.
+- Click into any class to see:
+  - **Read-only metrics** for every student in that class (understanding, AI dependency, etc.).
+  - **Read-only grades** and class averages.
+- Open the **Global Metrics** view (button on the admin landing page) to see:
+  - Overall average student metrics across the database as charts.
+  - **Multi-select filters** for subject, semester, period, and teacher, where each filter list automatically narrows based on the others.
 
-
-
+The admin account **cannot** add/edit/delete classes, students, or assignments; it is strictly for analytics/visibility.

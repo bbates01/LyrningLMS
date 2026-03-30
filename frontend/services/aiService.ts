@@ -1,6 +1,4 @@
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
+import { API_BASE } from './api';
 
 /** Extract text from uploaded PDFs (backend reads file content). Returns array of text per file. */
 export async function extractPdfText(files: File[]): Promise<string[]> {

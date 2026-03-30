@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import AddStudentToClassCard from './AddStudentToClassCard';
+import { API_BASE } from '../services/api';
 
 type ExistingStudent = {
   student_id: number;
@@ -17,10 +18,6 @@ interface StudentPasswordsCardProps {
 
 const PASSWORDS_STORAGE_KEY = 'lyrning_student_passwords_by_id';
 const LEGACY_STORAGE_KEY = 'lyrning_student_passwords';
-
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 function toPasswordMapFromLegacyRows(rawRows: unknown): Record<number, string> {
   if (!Array.isArray(rawRows)) return {};

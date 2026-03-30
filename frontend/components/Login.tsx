@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { UserRole, UserSession } from '../types';
 import { COLORS } from '../constants';
+import { API_BASE } from '../services/api';
 
 interface LoginProps {
   onLogin: (session: UserSession) => void;
@@ -19,10 +20,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const apiBase =
-        import.meta.env.VITE_API_URL ||
-        (import.meta.env.DEV ? 'http://localhost:3001' : '');
-      const response = await fetch(`${apiBase}/api/auth/login`, {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -52,7 +50,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         }
         onLogin(session);
       } else {
-        setError(data.error || 'Login failed. Please check your credentials.');
+        const base =
+          data.error || 'Login failed. Please check your credentials.';
+        const hint =
+          username.trim().toLowerCase() === 'admin'
+            ? ' Use “Administrator login” below — admin accounts sign in on that page, not here.'
+            : '';
+        setError(base + hint);
       }
     } catch (err) {
       setError('Connection error. Make sure the backend server is running.');
@@ -112,7 +116,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </form>
 
-        <div className="mt-8 pt-8 border-t border-gray-50 text-center">
+        <div className="mt-8 pt-8 border-t border-gray-50 text-center space-y-2">
+          <p className="text-xs text-gray-400">
+            <a href="/admin" className="text-gray-500 hover:text-gray-700 underline">
+              Administrator login
+            </a>
+          </p>
           <p className="text-xs text-gray-400">
             Forgot your password? Please contact your administrator.
           </p>
